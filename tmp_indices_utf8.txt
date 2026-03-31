@@ -1,0 +1,2 @@
+Index: idx_battery_telemetry_device_id, Col: device_id, Unique: False, Primary: False
+Index: idx_battery_telemetry_sitio, Col: sitio, Unique: False, Primary: False

@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}SOC - User Management{% endblock %}
+
+{% block styles %}
+<style>
+    .settings-container {
+        padding: 20px;
+    }
+
+    .user-table-section {
+        background: var(--card-bg);
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 4px 15px var(--shadow-color);
+        margin-bottom: 30px;
+    }
+
+    .section-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .users-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .users-table th, .users-table td {
+        padding: 15px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .role-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .role-admin { background: #fee2e2; color: #dc2626; }
+    .role-soc { background: #dcfce7; color: #16a34a; }
+    .role-viewer { background: #dbeafe; color: #2563eb; }
+
+    .perm-pill {
+        display: inline-block;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-size: 0.75em;
+        margin: 2px;
+        color: var(--text-light);
+    }
+
+    .btn-action {
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 1.1em;
+        padding: 5px;
+        transition: transform 0.2s;
+    }
+
+    .btn-edit { color: var(--info-color); }
+    .btn-delete { color: var(--danger-color); }
+
+    .btn-action:hover { transform: scale(1.2); }
+
+    /* Modal styles */
+    .user-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(5px);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background: var(--card-bg);
+        width: 100%;
+        max-width: 500px;
+        border-radius: 20px;
+        padding: 30px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+        margin-bottom: 25px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 15px;
+    }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9em; }
+    .form-group input, .form-group select {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+        background: var(--stat-card-bg);
+        color: var(--text-color);
+    }
+
+    .permissions-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 15px;
+        background: var(--body-bg);
+        border-radius: 10px;
+    }
+
+    .perm-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.85em;
+        cursor: pointer;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 30px;
+    }
+
+    .btn-save {
+        background: var(--primary-color);
+        color: white;
+        padding: 10px 25px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .btn-cancel {
+        background: transparent;
+        color: var(--text-light);
+        padding: 10px 20px;
+        border: none;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <div class="header" style="text-align: left; padding: 25px;">
+        <h1>Configuration & Security</h1>
+        <p>Manage SOC operators, custom roles, and granular system permissions.</p>
+    </div>
+
+    <!-- TABS -->
+    <div style="margin: 0 25px 20px 25px; display: flex; gap: 10px;">
+        <button class="refresh-btn" id="tab-users" onclick="SettingsManager.switchTab('users')" style="background: var(--primary-color)">
+            <i class="fas fa-users"></i> Users
+        </button>
+        <button class="refresh-btn" id="tab-roles" onclick="SettingsManager.switchTab('roles')" style="background: var(--stat-card-bg); color: var(--text-color)">
+            <i class="fas fa-user-shield"></i> Roles
+        </button>
+    </div>
+
+    <!-- USERS SECTION -->
+    <div class="user-table-section" id="section-users">
+        <div class="section-title-row">
+            <h2 class="section-title">Registered Users</h2>
+            <button class="refresh-btn" onclick="openCreateModal()">
+                <i class="fas fa-user-plus"></i> New User
+            </button>
+        </div>
+
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Role</th>
+                    <th>Permissions</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-tbody">
+                <!-- Data will be loaded here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ROLES SECTION -->
+    <div class="user-table-section" id="section-roles" style="display: none;">
+        <div class="section-title-row">
+            <h2 class="section-title">Custom Roles</h2>
+            <button class="refresh-btn" onclick="openRoleModal()">
+                <i class="fas fa-shield-alt"></i> New Role
+            </button>
+        </div>
+
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Role Name</th>
+                    <th>Default Permissions</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="roles-tbody">
+                <!-- Role data will be loaded here -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal for Create/Edit User (Existing slightly modified) -->
+<div class="user-modal" id="userModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Create New User</h2>
+        </div>
+        <form id="userForm">
+            <input type="hidden" id="userId">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" required>
+            </div>
+            <div style="display: flex; gap: 15px;">
+                <div class="form-group" style="flex: 1;">
+                    <label for="first_name">First Name</label>
+                    <input type="text" id="first_name">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="last_name">Last Name</label>
+                    <input type="text" id="last_name">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="password">Password (leave blank to keep current if editing)</label>
+                <input type="password" id="password">
+            </div>
+            <div class="form-group">
+                <label for="role">Role</label>
+                <select id="role" onchange="applyRoleDefaults()">
+                    <!-- Options will be loaded dynamically from roles table -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Permissions Overlay (Custom for this user)</label>
+                <div class="permissions-grid" id="user-perms-grid">
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_alarms"> View Alarms</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_cameras"> View Cameras</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_batteries"> View Batteries</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_hvac"> View HVAC</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="export_data"> Export Reports</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="admin_users"> Admin Management</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="can_interact"> Can Interact (Checkboxes)</label>
+                </div>
+            </div>
+
+            <div class="form-group" id="api-access-section" style="display: none; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                <label style="color: var(--primary-color); font-weight: bold;"><i class="fas fa-plug"></i> Granular API Access (Customer Role)</label>
+                <div class="permissions-grid" id="api-perms-grid">
+                    <label class="perm-checkbox"><input type="checkbox" data-api="get_dashboard_state"> Dashboard API</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-api="get_ac_data"> AC Metrics API</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-api="get_battery_history"> Battery Telemetry API</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-api="export_data_api"> Export Service API</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn-save" id="saveBtn">Save User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal for Create/Edit Role -->
+<div class="user-modal" id="roleModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="roleModalTitle">Create Global Role</h2>
+        </div>
+        <form id="roleForm">
+            <input type="hidden" id="roleId">
+            <div class="form-group">
+                <label for="roleName">Role Name</label>
+                <input type="text" id="roleName" required>
+            </div>
+            <div class="form-group">
+                <label>Default Permissions for this Role</label>
+                <div class="permissions-grid" id="role-perms-grid">
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_alarms"> View Alarms</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_cameras"> View Cameras</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_batteries"> View Batteries</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="view_hvac"> View HVAC</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="export_data"> Export Reports</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="admin_users"> Admin Management</label>
+                    <label class="perm-checkbox"><input type="checkbox" data-perm="can_interact"> Can Interact (Checkboxes)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeRoleModal()">Cancel</button>
+                <button type="submit" class="btn-save">Save Role</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/settings.js"></script>
+{% endblock %}

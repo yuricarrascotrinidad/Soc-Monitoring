@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}Fallas AC{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/battery.css') }}">
+<style>
+    /* Expandable row styles */
+    .expand-row {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .expand-row:hover {
+        background-color: var(--table-row-hover) !important;
+    }
+
+    .expand-chevron {
+        display: inline-block;
+        transition: transform 0.25s ease;
+        margin-right: 8px;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
+    .expand-chevron.open {
+        transform: rotate(90deg);
+    }
+
+    .detail-row td {
+        padding: 0 !important;
+    }
+
+    .detail-inner {
+        padding: 16px 24px;
+        background: var(--table-header-bg);
+        display: none;
+    }
+
+    .detail-inner.visible {
+        display: block;
+    }
+
+    .detail-label {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+    }
+
+    .detail-label strong {
+        color: var(--text-dark);
+    }
+
+    /* Battery mini cards inside expanded row */
+    .battery-mini-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .battery-mini-card {
+        background: var(--card-bg);
+        border-radius: 8px;
+        padding: 12px 16px;
+        border: 1px solid var(--table-border);
+        min-width: 160px;
+        flex: 0 0 auto;
+        transition: background 0.3s ease;
+    }
+
+    .battery-mini-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        font-weight: 700;
+        font-size: 0.82rem;
+        color: var(--text-dark);
+    }
+
+    .battery-mini-soc {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: var(--text-dark);
+        margin-bottom: 2px;
+    }
+
+    .battery-mini-flow {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+    }
+
+    .battery-mini-update {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+
+    .no-batteries {
+        color: var(--text-muted);
+        font-style: italic;
+        font-size: 0.85rem;
+    }
+
+    /* Checkbox styles */
+    .checkbox-revisado {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        user-select: none;
+        padding: 4px 8px;
+        border-radius: 20px;
+        transition: all 0.2s ease;
+    }
+
+    .checkbox-revisado:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .checkbox-revisado input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+        height: 0;
+        width: 0;
+    }
+
+    .checkmark {
+        position: relative;
+        display: inline-block;
+        height: 18px;
+        width: 18px;
+        background-color: transparent;
+        border: 2px solid var(--text-muted);
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+
+    .checkbox-revisado input:checked~.checkmark {
+        background-color: var(--normal-green);
+        border-color: var(--normal-green);
+    }
+
+    .checkmark:after {
+        content: "";
+        position: absolute;
+        display: none;
+        left: 5px;
+        top: 1px;
+        width: 5px;
+        height: 10px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+    }
+
+    .checkbox-revisado input:checked~.checkmark:after {
+        display: block;
+    }
+
+    /* Estado revisado para la fila */
+    tr.revisado-row {
+        opacity: 0.7;
+        background-color: rgba(34, 197, 94, 0.1) !important;
+    }
+
+    tr.revisado-row td:first-child i {
+        color: var(--normal-green);
+    }
+
+    /* Notificaciones */
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 9999;
+        font-size: 0.95rem;
+        animation: slideIn 0.3s ease;
+    }
+
+    .notification.success {
+        background: #10b981;
+        color: white;
+    }
+
+    .notification.error {
+        background: #ef4444;
+        color: white;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="battery-dashboard-container">
+    <div class="header-section">
+        <div class="header-title">
+            <h1><i class="fa-solid fa-plug-circle-exclamation"></i>Power Grid Failures</h1>
+            <p id="update-timestamp">Last update: --/--/-- --:--:--</p>
+        </div>
+        <button onclick="loadData()" class="refresh-button">
+            <i class="fa-solid fa-rotate"></i> Update
+        </button>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-grid">
+        <div class="summary-card" id="card-total" onclick="filterByStatus('all')">
+            <i class="fa-solid fa-plug-circle-exclamation icon" style="color: var(--critical-red);"></i>
+            <span class="title">AC Failures</span>
+            <div class="value" id="stat-total">0</div>
+            <div class="sub-value" id="stat-counts-sub">0 Access - 0 Transport</div>
+        </div>
+        <div class="summary-card" id="card-discharging" onclick="filterByStatus('DISCHARGING')">
+            <i class="fa-solid fa-battery-empty icon" style="color: var(--critical-red);"></i>
+            <span class="title">Discharging</span>
+            <div class="value" id="stat-discharging">0</div>
+            <div class="sub-value">Discharging Batteries</div>
+        </div>
+        <div class="summary-card" id="card-idle" onclick="filterByStatus('IDLE')">
+            <i class="fa-solid fa-battery-half icon" style="color: var(--caution-yellow);"></i>
+            <span class="title">Idle</span>
+            <div class="value" id="stat-idle">0</div>
+            <div class="sub-value">Idle Batteries</div>
+        </div>
+        <div class="summary-card" id="card-charging" onclick="filterByStatus('CHARGING')">
+            <i class="fa-solid fa-battery-full icon" style="color: var(--normal-green);"></i>
+            <span class="title">Charging</span>
+            <div class="value" id="stat-charging">0</div>
+            <div class="sub-value">Charging Batteries</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <span class="filter-label"><i class="fa-solid fa-filter"></i> Type:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="tipo" data-value="todos">All</button>
+                <button class="filter-btn" data-filter="tipo" data-value="access"><i class="fa-solid fa-door-open"></i>
+                    Access</button>
+                <button class="filter-btn" data-filter="tipo" data-value="transport"><i class="fa-solid fa-truck"></i>
+                    Transport</button>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <span class="filter-label"><i class="fa-solid fa-location-dot"></i> Region:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="region" data-value="todas">All</button>
+                <button class="filter-btn" data-filter="region" data-value="Ancash">Ancash</button>
+                <button class="filter-btn" data-filter="region" data-value="Arequipa">Arequipa</button>
+                <button class="filter-btn" data-filter="region" data-value="La Libertad">La Libertad</button>
+                <button class="filter-btn" data-filter="region" data-value="San Martin">San Martin</button>
+            </div>
+        </div>
+
+        <a href="javascript:void(0)" class="clear-filters" onclick="resetFilters()">
+            <i class="fa-solid fa-circle-xmark"></i> Clear filters
+        </a>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Date/Time</th>
+                    <th>Site</th>
+                    <th>Region</th>
+                    <th>Type</th>
+                    <th>Voltage</th>
+                    <th>Batteries</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="data-body">
+                <tr>
+                    <td colspan="9" class="text-center">Loading data...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="{{ url_for('static', filename='js/falla_ac.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,835 @@
+{% extends 'base.html' %}
+
+{% block title %}Aire Acondicionado - SOC{% endblock %}
+
+{% block styles %}
+<style>
+    /* =========================
+   CONTENEDOR HVAC
+========================= */
+    .hvac-container {
+        padding: 20px;
+        background: var(--bg-color);
+        min-height: 100vh;
+        color: var(--text-color);
+    }
+
+    /* =========================
+   HEADER
+========================= */
+    .hvac-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .hvac-header h1 {
+        margin: 0;
+        font-size: 1.8rem;
+        color: var(--primary-color);
+    }
+
+    /* FIX DARK MODE TITLE */
+    .dark-theme .hvac-header h1 {
+        color: var(--text-color);
+    }
+
+    /* =========================
+   SEARCH
+========================= */
+    .search-box {
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 12px 20px;
+        border-radius: 25px;
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        color: var(--text-color);
+        outline: none;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s;
+    }
+
+    .search-box input:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    /* =========================
+   KPI CARDS
+========================= */
+    .kpi-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 25px;
+    }
+
+    .kpi-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .kpi-card h3 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+        color: var(--text-muted);
+    }
+
+    .kpi-card .value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+
+    /* FIX KPI DARK MODE */
+    .dark-theme .kpi-card .value {
+        color: var(--text-color);
+    }
+
+    .dark-theme .kpi-card h3 {
+        color: var(--text-light);
+    }
+
+    .dark-theme .kpi-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+    }
+
+    /* =========================
+   TABLE
+========================= */
+    .table-container {
+        background: var(--card-bg);
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        margin-bottom: 20px;
+    }
+
+    .hvac-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .hvac-table th {
+        background: var(--primary-color);
+        color: white;
+        padding: 15px;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+    }
+
+    .hvac-table td {
+        padding: 15px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: top;
+    }
+
+    .hvac-table tr:hover {
+        background: rgba(0, 0, 0, 0.03);
+    }
+
+    .dark-theme .hvac-table tr:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* =========================
+   BADGES
+========================= */
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: bold;
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+
+    .badge-access {
+        background: #17a2b8;
+        color: white;
+    }
+
+    .badge-transport {
+        background: #6f42c1;
+        color: white;
+    }
+
+    .badge-status-on {
+        background: #28a745;
+        color: white;
+    }
+
+    .badge-status-off {
+        background: #dc3545;
+        color: white;
+    }
+
+    .badge-status-unknown {
+        background: #6c757d;
+        color: white;
+    }
+
+    .badge-conn-ok {
+        background: #28a745;
+        color: white;
+    }
+
+    .badge-conn-fail {
+        background: #dc3545;
+        color: white;
+    }
+
+    /* =========================
+   AIR CONDITIONER ITEM
+========================= */
+    .aa-item {
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px dashed var(--border-color);
+    }
+
+    .aa-item:last-child {
+        margin-bottom: 0;
+        border-bottom: none;
+    }
+
+    .aa-title {
+        font-weight: 600;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .aa-detail {
+        font-size: 0.9em;
+        color: var(--text-muted);
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 5px;
+    }
+
+    /* =========================
+   FILTER BAR
+========================= */
+    .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        background: var(--card-bg);
+        padding: 15px 20px;
+        border-radius: 10px;
+        margin-bottom: 25px;
+        border: 1px solid var(--border-color);
+        align-items: center;
+    }
+
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .filter-label {
+        font-weight: bold;
+        font-size: 0.9em;
+        color: var(--text-muted);
+    }
+
+    .filter-options {
+        display: flex;
+        gap: 5px;
+    }
+
+    .filter-btn {
+        padding: 6px 12px;
+        border: 1px solid var(--border-color);
+        background: var(--stat-card-bg);
+        color: var(--text-color);
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.85em;
+        transition: all 0.2s;
+    }
+
+    .filter-btn:hover {
+        border-color: var(--primary-color);
+    }
+
+    .filter-btn.active {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+
+    .clear-filters {
+        color: var(--danger-color);
+        text-decoration: none;
+        font-size: 0.85em;
+        font-weight: bold;
+    }
+
+    /* =========================
+   PAGINATION
+========================= */
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .page-btn {
+        padding: 8px 15px;
+        border: 1px solid var(--primary-color);
+        background: var(--card-bg);
+        color: var(--primary-color);
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .page-btn:hover:not(:disabled) {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .page-btn:disabled {
+        border-color: var(--border-color);
+        color: var(--text-muted);
+        cursor: not-allowed;
+    }
+
+    /* =========================
+   LOADER
+========================= */
+    .loader-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 50px;
+        gap: 15px;
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 5px solid var(--border-color);
+        border-top-color: var(--primary-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hvac-container">
+    <div class="hvac-header">
+        <h1>❄️ Aire Acondicionado</h1>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Buscar sitio, región...">
+        </div>
+        <div>
+            <button id="exportBtn" class="page-btn" title="Exportar a CSV" style="margin-right: 10px;"><i
+                    class="fas fa-file-csv"></i> Exportar</button>
+            <button id="refreshBtn" class="page-btn" title="Actualizar Datos"><i class="fas fa-sync-alt"></i></button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <span class="filter-label"><i class="fas fa-filter"></i> Tipo:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="tipo" data-value="todos">Todos</button>
+                <button class="filter-btn" data-filter="tipo" data-value="access">Access</button>
+                <button class="filter-btn" data-filter="tipo" data-value="transport">Transport</button>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <span class="filter-label"><i class="fas fa-location-dot"></i> Región:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="region" data-value="todas">Todas</button>
+                <button class="filter-btn" data-filter="region" data-value="Ancash">Ancash</button>
+                <button class="filter-btn" data-filter="region" data-value="Arequipa">Arequipa</button>
+                <button class="filter-btn" data-filter="region" data-value="La Libertad">La Libertad</button>
+                <button class="filter-btn" data-filter="region" data-value="San Martin">San Martin</button>
+            </div>
+        </div>
+
+        <a href="javascript:void(0)" class="clear-filters" onclick="resetFilters()">
+            <i class="fas fa-circle-xmark"></i> Limpiar filtros
+        </a>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-container">
+        <div class="kpi-card" id="card-total" onclick="filterByStatus('all')">
+            <h3>Total Sitios</h3>
+            <div class="value" id="kpi-total">0</div>
+        </div>
+        <div class="kpi-card" id="card-con-aa" onclick="filterByStatus('con-aa')">
+            <h3>Sitios con AA</h3>
+            <div class="value" id="kpi-con-aa" style="color: #17a2b8;">0</div>
+        </div>
+        <div class="kpi-card" id="card-sin-aa" onclick="filterByStatus('sin-aa')">
+            <h3>Sitios sin AA</h3>
+            <div class="value" id="kpi-sin-aa" style="color: #6c757d;">0</div>
+        </div>
+        <div class="kpi-card">
+            <h3>Total Equipos AA</h3>
+            <div class="value" id="kpi-total-aa">0</div>
+        </div>
+    </div>
+
+    <!-- Contenedor Principal -->
+    <div id="mainContent">
+        <div class="loader-container" id="loader">
+            <div class="spinner"></div>
+            <h3>Cargando datos de telemetría...</h3>
+        </div>
+
+        <div id="tableWrapper" style="display: none;">
+            <div class="table-container">
+                <table class="hvac-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th width="20%">Sitio / Región</th>
+                            <th width="10%">Tipo</th>
+                            <th width="70%">Detalles del Aire Acondicionado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Llenado dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <button class="page-btn" id="prevBtn" onclick="changePage(-1)">Anterior</button>
+                <span id="pageInfo">Página 1 de 1</span>
+                <button class="page-btn" id="nextBtn" onclick="changePage(1)">Siguiente</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Variables de estado
+    let allData = [];
+    let currentFilters = {
+        tipo: 'todos',
+        region: 'todas',
+        status: 'all'
+    };
+    const itemsPerPage = 20;
+
+    // Elementos del DOM
+    const loader = document.getElementById('loader');
+    const tableWrapper = document.getElementById('tableWrapper');
+    const tableBody = document.getElementById('tableBody');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const pageInfo = document.getElementById('pageInfo');
+    const searchInput = document.getElementById('searchInput');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const exportBtn = document.getElementById('exportBtn');
+
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchData();
+
+        // Event listeners
+        searchInput.addEventListener('input', handleSearch);
+        refreshBtn.addEventListener('click', () => {
+            loader.style.display = 'flex';
+            tableWrapper.style.display = 'none';
+            fetchData();
+        });
+        exportBtn.addEventListener('click', exportToCSV);
+
+        // Actualizar automáticamente cada 5 minutos
+        setInterval(fetchData, 300000);
+
+        // Event listeners para botones de filtro
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const group = btn.dataset.filter;
+                const value = btn.dataset.value;
+
+                document.querySelectorAll(`.filter-btn[data-filter="${group}"]`).forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                currentFilters[group] = value;
+                handleSearch();
+            });
+        });
+    });
+
+    // Cargar datos del servidor
+    let _retryTimer = null;
+    async function fetchData() {
+        try {
+            // El interceptor añadirá el token JWT automáticamente
+            const response = await fetch('/api/hvac_data');
+
+            if (response.status === 403) {
+                loader.innerHTML = `
+                    <i class="fas fa-lock" style="font-size: 3rem; color: var(--danger-color);"></i>
+                    <h3 style="color: var(--danger-color);">Sin permiso</h3>
+                    <p>Tu rol no tiene acceso al módulo HVAC. Contacta al administrador del sistema.</p>
+                `;
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            allData = data.records || [];
+
+            if (allData.length === 0) {
+                // Los datos aún no están disponibles — el hilo de fondo sigue cargando
+                loader.innerHTML = `
+                    <div class="spinner"></div>
+                    <h3>Cargando datos de telemetría...</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9em;">El primer ciclo de recolección puede tardar hasta 2 minutos.</p>
+                    <button class="page-btn" style="margin-top: 10px;" onclick="fetchData()">Actualizar ahora</button>
+                `;
+                // Reintentar automáticamente cada 20 segundos
+                if (!_retryTimer) {
+                    _retryTimer = setInterval(() => {
+                        if (allData.length === 0) fetchData();
+                        else { clearInterval(_retryTimer); _retryTimer = null; }
+                    }, 20000);
+                }
+                return;
+            }
+
+            // Datos disponibles — cancelar reintentos
+            if (_retryTimer) { clearInterval(_retryTimer); _retryTimer = null; }
+
+            // Actualizar KPIs
+            updateKPIs();
+
+            // Aplicar búsqueda actual y renderizar
+            handleSearch();
+
+            // Mostrar tabla
+            loader.style.display = 'none';
+            tableWrapper.style.display = 'block';
+
+        } catch (error) {
+            console.error("Error fetching HVAC data:", error);
+            loader.innerHTML = `
+                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--danger-color);"></i>
+                <h3 style="color: var(--danger-color);">Error cargando los datos</h3>
+                <p>No se pudo conectar con el servidor.</p>
+                <button class="page-btn" onclick="fetchData()">Reintentar</button>
+            `;
+        }
+    }
+
+    function updateKPIs() {
+        if (!allData || allData.length === 0) return;
+
+        const total = allData.length;
+        const conAA = allData.filter(r => r.aires && r.aires.length > 0).length;
+        const sinAA = total - conAA;
+
+        let totalEquipos = 0;
+        allData.forEach(r => {
+            if (r.aires) totalEquipos += r.aires.length;
+        });
+
+        document.getElementById('kpi-total').textContent = total;
+        document.getElementById('kpi-con-aa').textContent = conAA;
+        document.getElementById('kpi-sin-aa').textContent = sinAA;
+        document.getElementById('kpi-total-aa').textContent = totalEquipos;
+    }
+
+    function handleSearch() {
+        const term = searchInput.value.toLowerCase().trim();
+
+        filteredData = allData.filter(item => {
+            // Buscador de texto
+            const sitio = (item.sitio.station_name || '').toLowerCase();
+            const regionSitio = (item.sitio.region || '').toLowerCase();
+            const id = (item.sitio.precinct_id || '').toLowerCase();
+            const matchTerm = !term || sitio.includes(term) || regionSitio.includes(term) || id.includes(term);
+
+            // Filtro de tipo
+            const matchTipo = currentFilters.tipo === 'todos' || item.sitio.tipo === currentFilters.tipo;
+
+            // Filtro de región
+            const matchRegion = currentFilters.region === 'todas' || item.sitio.region === currentFilters.region;
+
+            // Filtro de status (con/sin AA)
+            let matchStatus = true;
+            if (currentFilters.status === 'con-aa') {
+                matchStatus = item.aires && item.aires.length > 0;
+            } else if (currentFilters.status === 'sin-aa') {
+                matchStatus = !item.aires || item.aires.length === 0;
+            }
+
+            return matchTerm && matchTipo && matchRegion && matchStatus;
+        });
+
+        currentPage = 1;
+        renderTable();
+    }
+
+    function filterByStatus(status) {
+        currentFilters.status = status;
+
+        // Highlight active card
+        document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('active-filter'));
+        if (status === 'all') document.getElementById('card-total').classList.add('active-filter');
+        else if (status === 'con-aa') document.getElementById('card-con-aa').classList.add('active-filter');
+        else if (status === 'sin-aa') document.getElementById('card-sin-aa').classList.add('active-filter');
+
+        handleSearch();
+    }
+
+    function resetFilters() {
+        searchInput.value = '';
+        currentFilters = {
+            tipo: 'todos',
+            region: 'todas',
+            status: 'all'
+        };
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            const group = btn.dataset.filter;
+            const value = btn.dataset.value;
+            if (value === 'todos' || value === 'todas') btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+
+        document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('active-filter'));
+
+        handleSearch();
+    }
+
+    function changePage(delta) {
+        const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+        const newPage = currentPage + delta;
+
+        if (newPage >= 1 && newPage <= totalPages) {
+            currentPage = newPage;
+            renderTable();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    function formatTemperature(val) {
+        if (val === null || val === undefined || val === '') return 'N/A';
+        return `${Number(val).toFixed(1)}°C`;
+    }
+
+    function formatHumidity(val) {
+        if (val === null || val === undefined || val === '') return 'N/A';
+        return `${Number(val).toFixed(1)}%`;
+    }
+
+    function renderTable() {
+        if (filteredData.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="3" style="text-align: center; padding: 30px;">
+                        <i class="fas fa-search" style="font-size: 2rem; color: var(--text-muted); margin-bottom: 15px;"></i>
+                        <h3>No se encontraron resultados</h3>
+                    </td>
+                </tr>
+            `;
+            updatePagination();
+            return;
+        }
+
+        const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, filteredData.length);
+        const pageData = filteredData.slice(startIndex, endIndex);
+
+        let html = '';
+
+        pageData.forEach(row => {
+            const s = row.sitio;
+            const aires = row.aires || [];
+
+            // Format Sitio Column
+            const tipoCls = s.tipo === 'access' ? 'badge-access' : 'badge-transport';
+            const tipoIcon = s.tipo === 'access' ? 'fa-door-open' : 'fa-truck';
+
+            let airesHtml = '';
+
+            if (aires.length === 0) {
+                airesHtml = `<div style="color: var(--text-muted); font-style: italic;">Sin Aires Acondicionados detectados en el árbol de dispositivos.</div>`;
+            } else {
+                airesHtml = aires.map(aa => {
+                    const v = aa.valores || {};
+                    const hasData = aa.tiene_datos;
+
+                    if (!hasData) {
+                        return `
+                            <div class="aa-item">
+                                <div class="aa-title">📦 ${aa.nombre || 'Aire Acondicionado'}</div>
+                                <div style="color: var(--danger-color); font-size: 0.85em;">
+                                    <i class="fas fa-exclamation-circle"></i> Sin respuesta de telemetría o equipo desconectado
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Determinar si es access o transport para parsear
+                    let detailsHtml = '';
+
+                    if (s.tipo === 'access') {
+                        const temp = formatTemperature(v.temperatura);
+                        const connCls = v.conexion === 0 ? 'badge-conn-ok' : (v.conexion === 1 ? 'badge-conn-fail' : 'badge-status-unknown');
+
+                        detailsHtml = `
+                            <div class="aa-stat"><strong>Temperatura:</strong> ${temp}</div>
+                            <div class="aa-stat"><strong>Conexión:</strong> <span class="badge ${connCls}">${v.conexion_str || 'N/A'}</span></div>
+                        `;
+                    } else {
+                        // Transport
+                        let statusCls = 'badge-status-unknown';
+                        if (v.status === 21) statusCls = 'badge-status-on';
+                        if (v.status === 23) statusCls = 'badge-status-off';
+
+                        const connCls = v.conexion === 0 ? 'badge-conn-ok' : (v.conexion === 1 ? 'badge-conn-fail' : 'badge-status-unknown');
+
+                        detailsHtml = `
+                            <div class="aa-stat"><strong>Estado:</strong> <span class="badge ${statusCls}">${v.status_str || 'N/A'}</span></div>
+                            <div class="aa-stat"><strong>Conexión:</strong> <span class="badge ${connCls}">${v.conexion_str || 'N/A'}</span></div>
+                            <div class="aa-stat"><strong>Sensor 1:</strong> ${formatTemperature(v.temp1)} / ${formatHumidity(v.hum1)}</div>
+                            <div class="aa-stat"><strong>Sensor 2:</strong> ${formatTemperature(v.temp2)} / ${formatHumidity(v.hum2)}</div>
+                        `;
+                    }
+
+                    const updateTime = v.ultimo_update ? `<div style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;"><i class="fas fa-clock"></i> Última lectura: ${v.ultimo_update}</div>` : '';
+
+                    return `
+                        <div class="aa-item">
+                            <div class="aa-title"><i class="fas fa-snowflake" style="color:#0dcaf0;"></i> ${aa.nombre || 'Aire Acondicionado'}</div>
+                            <div class="aa-detail">
+                                ${detailsHtml}
+                            </div>
+                            ${updateTime}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            html += `
+                <tr>
+                    <td>
+                        <strong class="site-name-text" style="font-size: 1.1em;">${s.station_name}</strong>
+                        <div style="font-size: 0.9em; margin-top: 5px;"><i class="fas fa-map-marker-alt" style="color:var(--text-muted);"></i> ${s.region}</div>
+                    </td>
+                    <td>
+                        <span class="badge ${tipoCls}"><i class="fas ${tipoIcon}"></i> ${s.tipo.toUpperCase()}</span>
+                    </td>
+                    <td>
+                        ${airesHtml}
+                    </td>
+                </tr>
+            `;
+        });
+
+        tableBody.innerHTML = html;
+        updatePagination();
+    }
+
+    function updatePagination() {
+        const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
+
+        pageInfo.textContent = `Página ${currentPage} de ${totalPages} (${filteredData.length} sitios)`;
+
+        prevBtn.disabled = currentPage <= 1;
+        nextBtn.disabled = currentPage >= totalPages;
+    }
+
+    function exportToCSV() {
+        if (!allData || allData.length === 0) {
+            alert("No hay datos para exportar.");
+            return;
+        }
+
+        const dataToExport = searchInput.value.trim() ? filteredData : allData;
+        let csvContent = "data:text/csv;charset=utf-8,";
+
+        // Cabeceras
+        csvContent += "Sitio,Region,Tipo,Equipo_AA,Estado/Conexion,Temperatura,Temp_Sensor_1,Hum_Sensor_1,Temp_Sensor_2,Hum_Sensor_2,Ultimo_Update\n";
+
+        dataToExport.forEach(row => {
+            const s = row.sitio;
+            const aires = row.aires || [];
+
+            if (aires.length === 0) {
+                // Fila vacía para sitios sin AA
+                csvContent += `"${s.station_name}","${s.region}","${s.tipo}","Sin AA conectado","","","","","","",""\n`;
+            } else {
+                aires.forEach(aa => {
+                    const v = aa.valores || {};
+                    const aaName = (aa.nombre || "Aire Acondicionado").replace(/"/g, '""');
+
+                    if (!aa.tiene_datos) {
+                        csvContent += `"${s.station_name}","${s.region}","${s.tipo}","${aaName}","Desconectado/Sin Telemetria","","","","","",""\n`;
+                    } else if (s.tipo === 'access') {
+                        csvContent += `"${s.station_name}","${s.region}","${s.tipo}","${aaName}","${v.conexion_str || ''}","${v.temperatura || ''}","","","","","${v.ultimo_update || ''}"\n`;
+                    } else {
+                        // Transport
+                        csvContent += `"${s.station_name}","${s.region}","${s.tipo}","${aaName}","${v.status_str || ''} - ${v.conexion_str || ''}","","${v.temp1 || ''}","${v.hum1 || ''}","${v.temp2 || ''}","${v.hum2 || ''}","${v.ultimo_update || ''}"\n`;
+                    }
+                });
+            }
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("input");
+        link.setAttribute("type", "hidden");
+
+        const anchor = document.createElement('a');
+        anchor.setAttribute("href", encodedUri);
+        anchor.setAttribute("download", `HVAC_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,10 @@
+from app.utils.db import get_db_connection
+conn = get_db_connection()
+cur = conn.cursor()
+cur.execute("SELECT COUNT(DISTINCT sitio) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'AC_FAIL'")
+print(f"SITES_AC_FAIL: {cur.fetchone()[0]}")
+cur.execute("SELECT COUNT(*) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'AC_FAIL'")
+print(f"TOTAL_AC_FAIL: {cur.fetchone()[0]}")
+cur.execute("SELECT COUNT(DISTINCT device_id) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'BATERIA BAJA'")
+print(f"DEVICES_BAT_BAJA: {cur.fetchone()[0]}")
+conn.close()

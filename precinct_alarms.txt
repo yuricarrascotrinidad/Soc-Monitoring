@@ -1,0 +1,4 @@
+Sitio: A2095_AN_GORGORILLO | Device: CAM P.PRIN | Cat: Camara | Alarma: Alarma almacenamiento video fallado
+Sitio: T2230_AN_PAUCAS | Device: T2230_Rectificador | Cat: AC_FAIL | Alarma: Ac ingresa voltaje fase XX Ua
+Sitio: A2095_AN_GORGORILLO | Device: A2095_AN_GORGORILLO FSU | Cat: Fsu | Alarma: Alerta interrupción conexiónl dispositivo
+Sitio: A3152_LL_CANRAZ | Device: Patio S.Movimiento | Cat: Movimiento | Alarma: Alerta Masking

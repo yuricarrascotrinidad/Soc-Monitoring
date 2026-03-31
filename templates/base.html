@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/static/images/icon.png" type="image/png">
+    <title>{% block title %}Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=2.2">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Permitir estilos extra por página -->
+    {% block styles %}{% endblock %}
+    <script>
+        // Fetch Interceptor for JWT
+        (function () {
+            const originalFetch = window.fetch;
+            window.fetch = async function (...args) {
+                let [url, config] = args;
+                const token = localStorage.getItem('jwt_token');
+
+                // Only intercept API calls
+                if (typeof url === 'string' && (url.startsWith('/api') || url.startsWith('/exportar') || url.startsWith('/admin'))) {
+                    config = config || {};
+                    config.headers = config.headers || {};
+                    if (token) {
+                        config.headers['Authorization'] = `Bearer ${token}`;
+                    }
+
+                    const response = await originalFetch(url, config);
+
+                    // Handle session expiration
+                    if (response.status === 401) {
+                        const path = window.location.pathname;
+                        const protectedPaths = ['/dashboard', '/battery', '/falla_ac', '/camera_list', '/hvac'];
+                        if (protectedPaths.some(p => path.startsWith(p))) {
+                            localStorage.removeItem('jwt_token');
+                            window.location.href = '/login';
+                        }
+                    }
+                    return response;
+                }
+                return originalFetch(...args);
+            };
+        })();
+
+        // Session check on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('jwt_token');
+            const path = window.location.pathname;
+            const protectedPaths = ['/dashboard', '/battery', '/falla_ac', '/camera_list', '/settings', '/hvac'];
+            const isProtected = protectedPaths.some(p => path.startsWith(p));
+
+            if (!token && isProtected) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Si ya hay token y estamos en login, ir al dashboard
+            if (token && path === '/login') {
+                window.location.href = '/dashboard';
+                return;
+            }
+
+            // Show/Hide logout based on session
+            const logoutItem = document.getElementById('logout-item');
+            if (logoutItem) {
+                logoutItem.style.display = token ? 'flex' : 'none';
+            }
+
+            // Apply granular permissions
+            applyPermissions();
+        });
+
+        function applyPermissions() {
+            const permsStr = localStorage.getItem('user_permissions');
+            if (!permsStr) return;
+
+            const perms = JSON.parse(permsStr);
+            const role = localStorage.getItem('user_role');
+
+            // Admin bypasses hiding
+            if (role === 'admin') return;
+
+            // Mapping of permissions to CSS selectors
+            const permissionsMapping = {
+                'view_alarms': '[data-module="dashboard"], [data-module="access-alarms"], [data-module="transport-alarms"], [data-module="anomalies"], .module-group:has([data-module="dashboard"])',
+                'view_cameras': '[data-module="camera-list"], [data-module="access-cameras"], [data-module="transport-cameras"], .module-group:has([data-module="camera-list"])',
+                'view_batteries': '[data-module="battery"], [data-module="falla-ac"], .module-group:has([data-module="battery"])',
+                'view_hvac': '[data-module="hvac"], .module-group:has([data-module="hvac"])',
+                'admin_users': '[data-page="settings"], [onclick*="/settings"], .module-group:has([data-module="settings"])',
+                'export_data': '.export-btn'
+            };
+
+            // Hide everything that requires a permission the user doesn't have
+            Object.entries(permissionsMapping).forEach(([perm, selector]) => {
+                if (!perms[perm]) {
+                    document.querySelectorAll(selector).forEach(el => {
+                        el.style.display = 'none';
+                    });
+                }
+            });
+
+            // Special case for Settings module in sidebar
+            const settingsModule = document.querySelector('[data-module="settings"]');
+            if (settingsModule && !perms['admin_users']) {
+                settingsModule.parentElement.parentElement.style.display = 'none';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('jwt_token');
+            localStorage.removeItem('user_role');
+            localStorage.removeItem('user_permissions');
+            window.location.href = '/login';
+        }
+
+        function goToAlarms() {
+            const token = localStorage.getItem('jwt_token');
+            window.location.href = token ? '/dashboard' : '/';
+        }
+    </script>
+</head>
+
+
+<body>
+    <!-- MENÚ LATERAL DE MÓDULOS -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2 id="sidtitle">
+                <span class="yof">YOFC</span><span class="soc">SOC</span>
+            </h2>
+            <!--<button class="theme-toggle-sidebar" id="sidebarThemeToggle" title="Cambiar tema">
+                🌓
+            </button>-->
+        </div>
+
+        <div class="modules">
+            <!-- Módulos de Alarmas -->
+            <div class="module-group">
+                <div class="module-group-title">ALARMS</div>
+                <div class="module-group-content">
+                    <div class="module-item active" data-module="dashboard" onclick="goToAlarms()">
+                        <div class="module-name">Alarms</div>
+                        <div class="module-badge" id="total-alarms">...</div>
+                    </div>
+                    <div class="module-item" data-module="access-alarms">
+                        <div class="module-name">Access</div>
+                        <div class="module-badge" id="access-alarms-count">...</div>
+                    </div>
+                    <div class="module-item" data-module="transport-alarms">
+                        <div class="module-name">Transport</div>
+                        <div class="module-badge" id="transport-alarms-count">...</div>
+                    </div>
+                    <div class="module-item" data-module="anomalies">
+                        <div class="module-name">Anomalías</div>
+                        <div class="module-badge" id="anomalies-count">...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Módulos de Cámaras -->
+            <div class="module-group">
+                <div class="module-group-title">CAMERAS</div>
+                <div class="module-group-content">
+                    <div class="module-item" data-module="camera-list" onclick="window.location.href='/camera_list'">
+                        <div class="module-name">Camera list</div>
+                        <div class="module-badge" id="total-cameras">...</div>
+                    </div>
+                    <div class="module-item" data-module="access-cameras">
+                        <div class="module-name">Access camera</div>
+                        <div class="module-badge" id="access-cameras-count">...</div>
+                    </div>
+                    <div class="module-item" data-module="transport-cameras">
+                        <div class="module-name">Transport camera</div>
+                        <div class="module-badge" id="transport-cameras-count">...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Módulos de Baterias -->
+            <div class="module-group">
+                <div class="module-group-title">BATTERIES</div>
+                <div class="module-group-content">
+                    <div class="module-item" data-module="battery" onclick="window.location.href='/battery'">
+                        <div class="module-name">Battery</div>
+                        <div class="module-badge" id="battery-alerts-count">...</div>
+                    </div>
+                    <div class="module-item" data-module="falla-ac" onclick="window.location.href='/falla_ac'">
+                        <div class="module-name">Electric failure</div>
+                        <div class="module-badge" id="ac-failures-count">...</div>
+                    </div>
+                    <div class="module-item" data-module="region-la-libertad">
+                        <div class="module-name">show battery</div>
+                    </div>
+                    <div class="module-item" data-module="region-san-martin">
+                        <div class="module-name">issue battery</div>
+                    </div>
+                    <div class="module-item" data-module="disconnection" onclick="window.location.href='/disconection'">
+                        <div class="module-name">Battery disconnection</div>
+                        <div class="module-badge" id="disconnection-count">...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Módulos de Aire Acondicionado -->
+            <div class="module-group">
+                <div class="module-group-title">HVAC</div>
+                <div class="module-group-content">
+                    <div class="module-item" data-module="hvac" onclick="window.location.href='/hvac'">
+                        <div class="module-name">Aire Acondicionado</div>
+                        <div class="module-badge" id="hvac-alerts-count">...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Módulos del Sistema -->
+            <div class="module-group">
+                <div class="module-group-title">System</div>
+                <div class="module-group-content">
+                    <div class="module-item" data-module="system-status">
+                        <div class="module-name">System status</div>
+                    </div>
+                    <div class="module-item" data-module="logs">
+                        <div class="module-name">Logs and events</div>
+                    </div>
+                    <div class="module-item" data-module="reports">
+                        <div class="module-name">Reports</div>
+                    </div>
+                    <div class="module-item" data-module="settings" onclick="window.location.href='/settings'">
+                        <div class="module-name">Settings</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logout -->
+            <div class="module-group" id="logout-item" style="display: none;">
+                <div class="module-group-content">
+                    <div class="module-item" onclick="logout()" style="color: var(--danger-color);">
+                        <div class="module-name"><i class="fas fa-sign-out-alt"></i> Logout</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            Unified Surveillance System<br>
+            v2.0
+        </div>
+    </div>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <div class="main-content">
+        <button class="theme-toggle-main" id="mainThemeToggle" title="Cambiar tema">
+            <span id="themeIcon">🌙</span>
+        </button>
+
+        {% block content %}{% endblock %}
+
+    </div>
+
+    <script src="/static/js/dashboard.js?v=2.5"></script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

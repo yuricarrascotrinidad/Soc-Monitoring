@@ -1,0 +1,18 @@
+# Database files
+*.db
+*.db-wal
+*.db-shm
+
+# Build and distribution
+build/
+dist/
+*.spec
+*.pkg
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment and other
+.vscode/
+ngrok.exe

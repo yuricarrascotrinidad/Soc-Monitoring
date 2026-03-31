@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cámaras de Transporte - {{ site_name }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #764ba2;
+        }
+
+        h1 {
+            color: #333;
+            margin: 0;
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #764ba2;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .back-btn:hover {
+            background: #5a67d8;
+        }
+
+        .cameras-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .camera-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            transition: transform 0.3s;
+        }
+
+        .camera-card:hover {
+            transform: translateY(-5px);
+            border-color: #764ba2;
+        }
+
+        .camera-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .camera-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .position-badge {
+            background: #764ba2;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        .camera-info {
+            margin-bottom: 15px;
+        }
+
+        .camera-info p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .view-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background: #764ba2;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .view-btn:hover {
+            background: #5a67d8;
+        }
+
+        .all-cameras-btn {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .no-cameras {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📹 Cámaras de Transporte - {{ site_name }}</h1>
+            <a href="/" class="back-btn">← Volver al Dashboard</a>
+        </div>
+
+        {% if cameras %}
+        <div class="cameras-grid">
+            {% for position, ip in cameras.items() %}
+            <div class="camera-card">
+                <div class="camera-header">
+                    <div class="camera-title">
+                        {% if position == 'principal' %}
+                        🏢 Cámara Principal
+                        {% elif position == 'patio' %}
+                        🅿️ Cámara Patio
+                        {% elif position == 'equipo' %}
+                        🔌 Cámara Equipo
+                        {% elif position == 'generador' %}
+                        ⚡ Cámara Generador
+                        {% else %}
+                        📹 {{ position|title }}
+                        {% endif %}
+                    </div>
+                    <span class="position-badge">{{ position }}</span>
+                </div>
+                <div class="camera-info">
+                    <p><strong>IP:</strong> {{ ip }}</p>
+                    <p><strong>Sitio:</strong> {{ site_name }}</p>
+                </div>
+                <a href="/camera/transport/{{ site_name }}/{{ position }}" class="view-btn" target="_blank">
+                    Ver Cámara en Vivo
+                </a>
+                <button class="view-btn" style="margin-top: 10px; background: #48bb78;"
+                    onclick="openCameraModal('{{ site_name }}', '{{ position }}', '{{ ip }}')">
+                    Ver en Modal
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-cameras">
+            <h3>No hay cámaras de transporte registradas para este sitio</h3>
+            <p>Verifique el archivo txcamara.xlsx</p>
+        </div>
+        {% endif %}
+
+        <div class="all-cameras-btn">
+            <a href="/camera_list" class="back-btn">Ver todas las cámaras</a>
+        </div>
+    </div>
+
+    <script>
+        function openCameraModal(siteName, position, ip) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                z-index: 1000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+
+            const positionNames = {
+                'principal': 'Principal',
+                'patio': 'Patio',
+                'equipo': 'Equipo',
+                'generador': 'Generador'
+            };
+
+            const displayPosition = positionNames[position] || position;
+
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 10px; width: 90%; max-width: 1000px; max-height: 90vh; overflow: hidden;">
+                    <div style="padding: 20px; background: #764ba2; color: white; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0;">
+                            📹 ${siteName} - Cámara ${displayPosition}
+                            <br>
+                            <small style="font-size: 0.8em; opacity: 0.9;">IP: ${ip}</small>
+                        </h3>
+                        <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" 
+                                style="background: none; border: none; color: white; font-size: 1.5em; cursor: pointer;">
+                            ×
+                        </button>
+                    </div>
+                    <div style="padding: 20px;">
+                        <div style="width: 100%; height: 500px; background: #000; display: flex; justify-content: center; align-items: center;">
+                            <img src="/video_feed/transport/${siteName}/${position}" 
+                                 alt="Video en vivo de ${siteName} - ${position}"
+                                 style="max-width: 100%; max-height: 100%;">
+                        </div>
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button onclick="window.open('/camera/transport/${siteName}/${position}', '_blank')" 
+                                    style="padding: 10px 20px; background: #48bb78; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                                Abrir en nueva pestaña
+                            </button>
+                            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" 
+                                    style="padding: 10px 20px; background: #f56565; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+
+            const closeOnEsc = (e) => {
+                if (e.key === 'Escape') {
+                    modal.remove();
+                    document.removeEventListener('keydown', closeOnEsc);
+                }
+            };
+            document.addEventListener('keydown', closeOnEsc);
+        }
+    </script>
+</body>
+
+</html>

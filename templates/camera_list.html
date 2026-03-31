@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Cámaras - SOC{% endblock %}
+
+{% block styles %}
+<style>
+    .camera-grid-page {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        padding: 20px;
+    }
+
+    .camera-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .camera-card-header {
+        padding: 10px;
+        background: var(--primary-color);
+        color: white;
+        font-weight: bold;
+    }
+
+    .camera-card-body {
+        padding: 15px;
+        flex: 1;
+    }
+
+    .back-btn {
+        display: inline-block;
+        margin: 20px;
+        padding: 10px 20px;
+        background: var(--secondary-color);
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header"
+        style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+        <h1 style="margin: 0;">🎥 Todas las Cámaras</h1>
+
+        <div style="width: 100%; max-width: 400px; position: relative; margin-right: 50px;">
+            <input type="text" id="cameraSearch" placeholder="🔍 Buscar cámara (ej. A2003, MACASHCA)..."
+                style="width: 100%; padding: 12px 20px; border-radius: 25px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); outline: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Cámaras Access</h2>
+        <div class="camera-grid-page" id="access-cameras-list">
+            <!-- Filled by JS -->
+        </div>
+    </div>
+
+    <div class="section" style="margin-top: 30px;">
+        <h2 class="section-title">Cámaras Transport</h2>
+        <div class="camera-grid-page" id="transport-cameras-list">
+            <!-- Filled by JS -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal para ver cámara (Reutilizando estructura de index.html) -->
+<div class="camera-modal" id="cameraModal">
+    <div class="camera-modal-content">
+        <div class="camera-modal-header">
+            <h3 id="modalTitle">Live Camera</h3>
+            <button class="close-modal" onclick="closeCameraModal()">×</button>
+        </div>
+        <div class="camera-modal-body">
+            <div class="camera-stream">
+                <img id="cameraStream" src="" alt="Video en vivo" style="max-width: 100%; max-height: 100%;">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const response = await fetch('/cameras');
+            const data = await response.json();
+
+            // Render Access
+            const accessContainer = document.getElementById('access-cameras-list');
+
+            if (Array.isArray(data.access)) {
+                data.access.forEach(cam => {
+                    const card = document.createElement('div');
+                    card.className = 'camera-card';
+                    const siteName = cam.site || `Camera ${cam.id}`;
+                    // Guardamos el nombre en minúsculas para búsqueda fácil
+                    card.dataset.name = siteName.toLowerCase();
+
+                    // openCamera(site, type, pos)
+                    // type: 'access'
+                    // pos: 'principal' (default for access)
+                    card.innerHTML = `
+                        <div class="camera-card-header">${siteName}</div>
+                        <div class="camera-card-body">
+                            <button class="camera-btn" onclick="openCamera('${siteName}', 'access', 'principal')">Ver Stream</button>
+                        </div>
+                    `;
+                    accessContainer.appendChild(card);
+                });
+            }
+
+            // Render Transport
+            const transportContainer = document.getElementById('transport-cameras-list');
+            if (Array.isArray(data.transport)) {
+                data.transport.forEach(cam => {
+                    const card = document.createElement('div');
+                    card.className = 'camera-card';
+                    const siteName = cam.site || `Camera`;
+                    const pos = cam.position || 'Unknown';
+                    const title = `${siteName} (${pos})`;
+                    // Guardamos el nombre en minúsculas para búsqueda fácil
+                    card.dataset.name = title.toLowerCase();
+
+                    // openCamera(site, type, pos)
+                    // type: 'transport'
+                    card.innerHTML = `
+                        <div class="camera-card-header">${title}</div>
+                        <div class="camera-card-body">
+                             <button class="camera-btn" onclick="openCamera('${siteName}', 'transport', '${pos}')">Ver Stream</button>
+                        </div>
+                    `;
+                    transportContainer.appendChild(card);
+                });
+            }
+
+            // LÓGICA DEL BUSCADOR
+            const searchInput = document.getElementById('cameraSearch');
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase().trim();
+                const allCards = document.querySelectorAll('.camera-card');
+
+                allCards.forEach(card => {
+                    const name = card.dataset.name || '';
+                    if (name.includes(term)) {
+                        card.style.display = 'flex';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+
+        } catch (e) {
+            console.error("Error loading cameras", e);
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,1152 @@
+import time
+import json
+import requests
+import logging
+from datetime import datetime, timedelta
+import threading
+import psycopg2
+import psycopg2.extras
+from app.utils.db import get_db_connection, execute_db, query_db
+# from app.services.email_service import enviar_alerta_email
+from app.services.camera_service import CameraService
+from app.config import Config
+from app.utils.constants import CONFIG_REGIONES, REGLAS_EVENTOS, DATA_TEMPLATE, HEADERS, ALARM_TEMPLATE_AC, SENSORES_INTERES
+from app.utils.helpers import clasificar_evento_access, clasificar_evento_transport, convertir_duracion, filtrar_eventos_generales, determinar_tipo_evento
+import cv2
+import os
+import asyncio
+from urllib.parse import urlparse
+
+class AuthFailureException(Exception):
+    """Excepción para indicar que el token ha fallado."""
+    def __init__(self, segment, region, url_base):
+        self.segment = segment
+        self.region = region
+        self.url_base = url_base
+        super().__init__(f"Fallo de autenticación en {region} ({segment})")
+
+class MonitoringService:
+    _cleanup_lock = threading.Lock()
+    _last_cleanup = None
+    
+    # Dashboard Cache
+    _dashboard_lock = threading.Lock()
+    _dashboard_state = None
+    _last_dashboard_update = None
+    _connection_errors = {} # Track errors per region/type
+
+    # Sesión HTTP compartida con pool de conexiones. Evita abrir un socket TCP nuevo
+    # en cada petición (soluciona WinError 10048 por agotamiento de puertos).
+    _http_session = None
+    _http_session_lock = threading.Lock()
+
+    @classmethod
+    def _get_session(cls):
+        """Retorna una sesión HTTP compartida con pool de conexiones."""
+        if cls._http_session is None:
+            with cls._http_session_lock:
+                if cls._http_session is None:
+                    from requests.adapters import HTTPAdapter
+                    from urllib3.util import Retry
+                    session = requests.Session()
+                    # Aumentado drásticamente para evitar "discarding connection" y WinError 10055
+                    adapter = HTTPAdapter(
+                        pool_connections=50, 
+                        pool_maxsize=150, 
+                        max_retries=Retry(total=2, backoff_factor=0.5)
+                    )
+                    session.mount('http://', adapter)
+                    session.mount('https://', adapter)
+                    cls._http_session = session
+        return cls._http_session
+
+    @staticmethod
+    def obtener_alarmas(url, cookies, template=None, region=None, db_type=None):
+        if template is None:
+            from app.utils.constants import DATA_TEMPLATE
+            template = DATA_TEMPLATE
+            
+        try:
+            data = {"queryObjStr": json.dumps(template)}
+            session = MonitoringService._get_session()
+            with session.post(url, headers=HEADERS, cookies=cookies, data=data, timeout=25) as r:
+                # Detectar errores de autenticación clásicos
+                if r.status_code in [401, 403]:
+                    logging.warning(f"🚩 Error HTTP {r.status_code} detectado en {url}. Asumiendo token expirado.")
+                    parsed = urlparse(url)
+                    url_base = f"{parsed.scheme}://{parsed.netloc}"
+                    from app.utils.constants import CONFIG_REGIONES
+                    for seg, regions in CONFIG_REGIONES.items():
+                        for reg, cfg in regions.items():
+                            if cfg["url"] == url:
+                                raise AuthFailureException(seg, reg, url_base)
+                
+                r.raise_for_status()
+                
+                response_text = r.text
+                resp = None
+                is_login_page = False
+                
+                # 1. Intentar parsear como JSON
+                try:
+                    resp = r.json()
+                except Exception:
+                    resp = None
+
+            # 2. Analizar si es una página de login o sesión expirada
+            if resp:
+                # Si es JSON, solo consideramos fallo de auth si lo dice explícitamente el mensaje de error
+                if not resp.get("success"):
+                    msg = str(resp.get("msg", "")).lower()
+                    # Ampliamos keywords para detección de sesión fallida en JSON
+                    keywords = ["login", "session", "sesión", "timeout", "autenticación", "expir", "unauthorized", "token"]
+                    if any(word in msg for word in keywords):
+                        is_login_page = True
+                else:
+                    # El JSON indica éxito, ignoramos cualquier keyword accidental en el texto
+                    is_login_page = False
+            else:
+                # Si NO es JSON, buscamos indicadores de página HTML de login
+                # Solo si hay keywords típicas de un formulario de login
+                low_text = response_text.lower()
+                if any(word in low_text for word in ["tbuser", "tbpass", "authimg", "identifycode"]):
+                    is_login_page = True
+                # Detectar redirección específica por JavaScript (visto en logs)
+                elif 'location.href="./login"' in low_text or "location.href='./login'" in low_text:
+                    is_login_page = True
+                # O si nos redirigió a una URL de login
+                elif "login" in r.url.lower() and "queryalarm" not in r.url.lower():
+                    is_login_page = True
+            
+            if is_login_page:
+                logging.warning(f"🚩 DETECTADO DESLOGUEO en {url}. Iniciando reparación...")
+                parsed = urlparse(url)
+                url_base = f"{parsed.scheme}://{parsed.netloc}"
+                
+                # Limpiar cookies de la sesión compartida para esta URL/Dominio
+                with MonitoringService._http_session_lock:
+                    session = MonitoringService._get_session()
+                    domain = parsed.hostname
+                    keys_to_remove = [c.name for c in session.cookies if c.domain == domain]
+                    for key in keys_to_remove:
+                        session.cookies.set(key, None, domain=domain)
+                
+                from app.utils.constants import CONFIG_REGIONES
+                for seg, regions in CONFIG_REGIONES.items():
+                    for reg, cfg in regions.items():
+                        if cfg["url"] == url:
+                            raise AuthFailureException(seg, reg, url_base)
+            
+            # Si no es login pero no hubo éxito, loguear un pedazo de la respuesta para depurar
+            if resp and not resp.get("success"):
+                logging.info(f"🔍 Respuesta fallida (sin login) de {url}: {response_text[:150]}...")
+            elif not resp:
+                logging.info(f"🔍 Respuesta no-JSON de {url}: {response_text[:100]}...")
+            
+            if resp and resp.get("success"):
+                # Limpiar errores de conexión si tenemos éxito
+                error_key = f"{db_type}:{region}" if region else url
+                MonitoringService._connection_errors[error_key] = None
+                return resp["info"]["data"]
+            
+            if resp and not resp.get("success"):
+                logging.error(f"❌ Error en respuesta de {url}: {resp.get('msg')}")
+                
+        except AuthFailureException:
+            raise
+        except Exception as e:
+            error_key = f"{db_type}:{region}" if region else url
+            label = f"{region} ({db_type})" if region else url
+            msg = f"Error obteniendo alarmas {label}: {e}"
+            MonitoringService._connection_errors[error_key] = msg
+            logging.error(msg)
+            return None
+            
+        return []
+
+    @staticmethod
+    def guardar_alarmas(db_type, alarmas, region, is_ac=False):
+        """
+        Sincroniza alarmas usando la nueva arquitectura de dos tablas.
+        Implementa lógica de 'Limbo' para eventos no críticos.
+        """
+        conn = get_db_connection()
+        try:
+            if db_type == "access":
+                clasificar_func = clasificar_evento_access
+            else:
+                clasificar_func = clasificar_evento_transport
+
+            # Categorías que NO van al limbo (pasan directo al histórico)
+            CATEGORIAS_SIN_LIMBO = {'AC_FAIL', 'BATERIA BAJA', 'BATERIA', 'Bateria Lit. disc.'}
+            AHORA = datetime.now()
+
+            with conn:
+                cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                
+                # 1. Obtener alarmas que están actualmente en la tabla 'activas' para este segmento/región
+                # Filtramos por AC o NO AC para no interferir entre los dos hilos de monitoreo
+                if is_ac:
+                    cur.execute("SELECT * FROM alarmas_activas WHERE tipo=%s AND region=%s AND categoria='AC_FAIL'", (db_type, region))
+                else:
+                    cur.execute("SELECT * FROM alarmas_activas WHERE tipo=%s AND region=%s AND categoria!='AC_FAIL'", (db_type, region))
+                
+                activas_actuales = { (a['sitio'], a['alarma'], a['hora']): a for a in cur.fetchall() }
+                
+                # 2. Procesar alarmas nuevas que vienen del API
+                batch_nuevas = []
+                para_en_limbo = set() # (sitio, alarma, hora)
+                
+                for a in alarmas:
+                    sitio = a["station_name"]
+                    alarma = a["alarm_name"]
+                    hora = a["alarm_time"]
+                    key = (sitio, alarma, hora)
+                    para_en_limbo.add(key)
+                    
+                    categoria = clasificar_func(a)
+                    duracion = convertir_duracion(a.get("alarm_span_time", ""))
+                    
+                    batch_nuevas.append((
+                        db_type, region, hora, duracion, sitio, alarma, 
+                        a.get("device_name", ""), a.get("precinct_id", ""), a.get("mete_name", ""),
+                        categoria, 'on', a.get("device_id", ""), a.get("valor"), None # limbo_desde
+                    ))
+
+                # 3. Identificar alarmas que ya no están en el API (Finalizadas)
+                finalizadas_para_historico = []
+                finalizadas_para_limbo = []
+                
+                for key, data in activas_actuales.items():
+                    if key not in para_en_limbo:
+                        # Si ya estaba en limbo, ver si ya pasaron los 2 minutos
+                        if data['estado'] == 'limbo':
+                            if data['limbo_desde'] and (AHORA - data['limbo_desde']).total_seconds() > 120:
+                                finalizadas_para_historico.append(data)
+                        # Si no estaba en limbo, ver si le toca ir al limbo o directo a historia
+                        else:
+                            if data['categoria'] in CATEGORIAS_SIN_LIMBO:
+                                finalizadas_para_historico.append(data)
+                            else:
+                                finalizadas_para_limbo.append(data)
+
+                # 4. EJECUCIONES SQL (Transacción Robusta)
+                
+                # A. Mover al Histórico
+                if finalizadas_para_historico:
+                    records_hist = [(
+                        d['tipo'], d['region'], d['hora'], d['duracion'], d['sitio'], d['alarma'],
+                        d['devicename'], d['precinct_id'], d['mete_name'], d['categoria'], 'off',
+                        d['device_id'], d['valor']
+                    ) for d in finalizadas_para_historico]
+                    
+                    cur.executemany("""
+                        INSERT INTO alarmas_historicas 
+                        (tipo, region, hora, duracion, sitio, alarma, deviceName, precinct_id, mete_name, categoria, estado, device_id, valor)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, records_hist)
+                    
+                    # Borrar de activas
+                    ids_borrar = [d['id'] for d in finalizadas_para_historico]
+                    cur.execute("DELETE FROM alarmas_activas WHERE id IN %s", (tuple(ids_borrar),))
+
+                # B. Pasar al Limbo
+                if finalizadas_para_limbo:
+                    ids_limbo = [d['id'] for d in finalizadas_para_limbo]
+                    cur.execute("UPDATE alarmas_activas SET estado='limbo', limbo_desde=%s WHERE id IN %s", (AHORA, tuple(ids_limbo)))
+
+                # C. Sincronizar 'on' (Upsert)
+                if batch_nuevas:
+                    cur.executemany("""
+                        INSERT INTO alarmas_activas 
+                        (tipo, region, hora, duracion, sitio, alarma, deviceName, precinct_id, mete_name, categoria, estado, device_id, valor, limbo_desde)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (tipo, region, hora, sitio, alarma) 
+                        DO UPDATE SET duracion=EXCLUDED.duracion, estado='on', limbo_desde=NULL, valor=EXCLUDED.valor
+                    """, batch_nuevas)
+
+        except Exception as e:
+            logging.error(f"❌ Error guardando alarmas (Two-Table): {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
+    @staticmethod
+    def obtener_eventos_cumplidos(db_type):
+        """Obtiene eventos cumplidos para un tipo específico"""
+        reglas = REGLAS_EVENTOS[db_type]
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        ahora = datetime.now()
+        limite_filtro = (ahora - timedelta(hours=25)).strftime("%Y-%m-%d %H:%M:%S") # Margen de 25h
+
+        try:
+            # Consulta la tabla de activas filtrando estrictamente por las últimas 24 horas
+            cur.execute("""
+                SELECT sitio, categoria, estado, alarma, deviceName, hora, duracion, region
+                FROM alarmas_activas
+                WHERE tipo = %s AND hora >= %s
+                ORDER BY hora ASC
+            """, (db_type, limite_filtro))
+            
+            filas = cur.fetchall()
+        finally:
+            conn.close()
+
+        # No necesitamos tantos filtros de tiempo aquí porque 'guardar_alarmas' 
+        # ya se encarga de mover lo viejo al histórico.
+        alarmas_por_sitio = {}
+
+        for sitio, categoria, estado, alarma, device_name, hora_obj, duracion, region in filas:
+            # En la tabla de activas, solo mostramos 'on' y 'limbo'
+            # ElDashboard usará ambos, pero Battery/AC solo 'on'
+            
+            # PostgreSQL ya nos da objetos datetime
+            hora_dt = hora_obj if isinstance(hora_obj, datetime) else datetime.strptime(hora_obj, "%Y-%m-%d %H:%M:%S")
+            hora_str = hora_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+            alarmas_por_sitio.setdefault(sitio, {"categorias": set(), "detalles": [], "ultima_hora": "0000-00-00 00:00:00"})
+            alarmas_por_sitio[sitio]["categorias"].add(categoria)
+            
+            # Calcular hora final para el Dashboard
+            hora_final = hora_dt + timedelta(seconds=(duracion or 0))
+
+            alarmas_por_sitio[sitio]["detalles"].append(
+                {"hora": hora_str, "categoria": categoria, "estado": estado, 
+                 "hora_final": hora_final.strftime("%Y-%m-%d %H:%M:%S")}
+            )
+            if hora_str > alarmas_por_sitio[sitio]["ultima_hora"]:
+                alarmas_por_sitio[sitio]["ultima_hora"] = hora_str
+
+        # Eventos cumplidos
+        eventos_cumplidos = []
+        for sitio, data in alarmas_por_sitio.items():
+            eventos = [evento for evento, req in reglas.items()
+                       if req.issubset(data["categorias"])]
+            eventos = filtrar_eventos_generales(eventos, reglas)
+            if eventos:
+                # Para transporte, obtener todas las cámaras disponibles
+                if db_type == "transport":
+                    transport_cameras = CameraService.get_transport_cameras_for_site(sitio)
+                    has_cam = len(transport_cameras) > 0
+                    cameras_info = {
+                        "has_camera": has_cam,
+                        "cameras": transport_cameras,
+                        "available_positions": list(transport_cameras.keys())
+                    }
+                else:
+                    has_cam = CameraService.has_camera(sitio, "access")
+                    cameras_info = {"has_camera": has_cam}
+                
+                eventos_cumplidos.append({
+                    "sitio": sitio,
+                    "eventos": eventos,
+                    "tipo": db_type,
+                    "cameras": cameras_info,
+                    "ultima_hora": data["ultima_hora"]
+                })
+
+        return eventos_cumplidos
+
+    @staticmethod
+    def _init_db_notifications():
+        """Crear tabla de historial de notificaciones si no existe y manejar migraciones"""
+        try:
+            # Crear tabla base si no existe
+            execute_db("""
+                CREATE TABLE IF NOT EXISTS notificaciones_enviadas (
+                    sitio TEXT,
+                    tipo_sistema TEXT,
+                    tipo_evento TEXT,
+                    resuelto_desde TIMESTAMP,
+                    ultimo_envio TIMESTAMP,
+                    PRIMARY KEY (sitio, tipo_sistema)
+                )
+            """)
+            
+            # Verificar si falta la columna tipo_sistema
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'notificaciones_enviadas'")
+            columns = [col[0] for col in cur.fetchall()]
+            conn.close()
+            
+            # Migración: Asegurar estructura correcta y columna resuelto_desde
+            if 'resuelto_desde' not in columns:
+                logging.info("Migrando DB: Agregando columna resuelto_desde a notificaciones_enviadas")
+                execute_db("DROP TABLE IF EXISTS notificaciones_enviadas")
+                execute_db("""
+                    CREATE TABLE notificaciones_enviadas (
+                        sitio TEXT,
+                        tipo_sistema TEXT,
+                        tipo_evento TEXT,
+                        resuelto_desde TIMESTAMP,
+                        ultimo_envio TIMESTAMP,
+                        PRIMARY KEY (sitio, tipo_sistema)
+                    )
+                """)
+        except Exception as e:
+            logging.error(f"Error inicializando/migrando DB notificaciones: {e}")
+
+    @staticmethod
+    def procesar_nuevos_eventos(eventos_cumplidos, tipo_sistema):
+        if not eventos_cumplidos:
+            return
+
+        ahora = datetime.now()
+        from app.services.email_service import EmailService
+
+        for evento in eventos_cumplidos:
+            sitio = evento["sitio"]
+            try:
+                eventos_lista = evento["eventos"]
+                tipo = evento["tipo"]
+                tipo_evento = determinar_tipo_evento(eventos_lista)
+                
+                # --- LÓGICA FAIL-CLOSED: Verificar e Insertar en un solo bloque ---
+                debe_proceder = False
+                conn = None
+                try:
+                    conn = get_db_connection()
+                    cur = conn.cursor()
+                    cur.execute(
+                        "SELECT 1 FROM notificaciones_enviadas WHERE sitio=%s AND tipo_sistema=%s", 
+                        (sitio, tipo_sistema)
+                    )
+                    if cur.fetchone():
+                        # Ya notificado
+                        conn.close()
+                        continue
+                    
+                    # No notificado: Marcar inmediatamente para bloquear (Fail-Closed)
+                    cur.execute("""
+                        INSERT INTO notificaciones_enviadas (sitio, tipo_sistema, tipo_evento, resuelto_desde, ultimo_envio)
+                        VALUES (%s, %s, %s, NULL, %s)
+                    """, (sitio, tipo_sistema, tipo_evento, ahora))
+                    conn.commit()
+                    debe_proceder = True
+                except Exception as e:
+                    # En caso de ERROR (DB bloqueada, etc), NO enviamos para evitar duplicados
+                    logging.warning(f"DB Bloqueada o error para {sitio}. Saltando notificación por seguridad: {e}")
+                    debe_proceder = False
+                finally:
+                    if conn: conn.close()
+
+                if not debe_proceder:
+                    continue
+
+                # --- PROCESO DE CAPTURA Y ENVÍO (Solo si el bloqueo en DB fue exitoso) ---
+                imagenes_dict = {}
+                if tipo == "access":
+                    if CameraService.has_camera(sitio, "access"):
+                        img = CameraService.capture_snapshot(sitio, "access", "principal")
+                        imagenes_dict["principal"] = img
+                else: # transport
+                     cameras = CameraService.get_transport_cameras_for_site(sitio)
+                     for pos in cameras:
+                         img = CameraService.capture_snapshot(sitio, "transport", pos)
+                         imagenes_dict[pos] = img
+                
+                # Configurar estilos
+                if tipo == "transport":
+                    color_borde = "#dc3545"
+                    icono_sistema = "🚚"
+                    nivel_alerta = "CRÍTICO"
+                else:
+                    color_borde = "#ffc107"
+                    icono_sistema = "🚪"
+                    nivel_alerta = "ALERTA"
+                
+                asunto = f"{icono_sistema} {nivel_alerta} - {sitio} - {tipo_evento}"
+                cuerpo = f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border-left: 4px solid {color_borde}; padding-left: 20px;">
+                    <div style="margin-bottom: 25px;">
+                        <h1 style="color: {color_borde}; margin-bottom: 5px; font-size: 24px;">
+                            {icono_sistema} Alerta de Seguridad SOC
+                        </h1>
+                        <div style="background-color: #f8f9fa; padding: 10px 15px; border-radius: 5px;">
+                            <strong>Sitio:</strong> {sitio}<br>
+                            <strong>Nivel:</strong> <span style="color: {color_borde}; font-weight: bold;">{nivel_alerta}</span>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 25px; background-color: #fff3cd; padding: 15px; border-radius: 5px;">
+                        <h3 style="margin: 0; color: #856404;">Eventos Detectados</h3>
+                        <p>{', '.join(eventos_lista)}</p>
+                    </div>
+                    <!-- EVENTOS DETECTADOS -->
+                    <div style="margin-top: 30px; font-size: 12px; color: #6c757d;">
+                        Mensaje automático del Sistema SOC - {ahora.strftime('%Y-%m-%d %H:%M:%S')}
+                    </div>
+                </div>
+                """
+                
+                logging.debug(f"Enviando alerta para {sitio} ({tipo_evento})")
+                EmailService.enviar_alerta_email(asunto, cuerpo, imagenes_dict, sitio, tipo_evento)
+
+            except Exception as e:
+                logging.error(f"Error procesando evento {sitio}: {e}")
+
+    @staticmethod
+    def obtener_valores_dispositivo(ip, device_id, cookies_base):
+        """
+        Obtiene valores de SOC, carga y descarga para un dispositivo.
+        """
+        url = f"http://{ip}:8090/peim/request/realtime/getMeteValue"
+        headers = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        
+        cookies = cookies_base.copy()
+        cookies.update({
+            "contextPath": "/peim",
+            "language": "es_ES",
+            "limit": "8",
+            "loginUser": Config.PEIM_USER,
+            "proversion": "null"
+        })
+        
+        valores = {'soc': None, 'carga': None, 'descarga': None, 'voltaje': None, 'svoltage': None, 'current1': None, 'current2': None, 'conexion': None}
+        # ZTE specific sensors
+        for i in range(1, 5):
+            valores[f'soc_{i}'] = None
+            valores[f'cur_{i}'] = None
+        
+        payload = f"device_id={device_id}&is_manual=0"
+        try:
+            session = MonitoringService._get_session()
+            with session.post(url, headers=headers, cookies=cookies, data=payload, timeout=25) as resp:
+                resp.raise_for_status()
+                sensores = resp.json()
+            
+            for sensor in sensores:
+                mete_id = sensor.get("meteId", "")
+                mete_value = sensor.get("meteValue")
+                
+                # Use dynamic mapping from SENSORES_INTERES
+                from app.utils.constants import SENSORES_INTERES
+                if mete_id in SENSORES_INTERES:
+                    field = SENSORES_INTERES[mete_id]
+                    try: 
+                        val = float(mete_value) if mete_value is not None and mete_value != '' else None
+                        # Only update if we don't have a value or if this is the primary sensor
+                        if field in valores and valores[field] is None:
+                            valores[field] = val
+                    except: pass
+            
+            return valores
+        except Exception as e:
+            logging.error(f"Error obteniendo telemetria para {device_id}: {e}")
+            return valores
+
+    @staticmethod
+    def actualizar_telemetria_bateria_batch(batch_data):
+        """
+        Versión ROBUSTA: SOLO UPSERT - NUNCA BORRA.
+        Usa COALESCE y CASE para evitar que un hilo sobreescriba datos válidos con None o vacíos.
+        """
+        if not batch_data:
+            return
+            
+        conn = get_db_connection()
+        try:
+            with conn:
+                cur = conn.cursor()
+                for device_id, valores, sitio, nombre in batch_data:
+                    # Preparar valores con protecciones
+                    soc = valores.get('soc')
+                    carga = valores.get('carga')
+                    descarga = valores.get('descarga')
+                    voltaje = valores.get('voltaje')
+                    svoltage = valores.get('svoltage')
+                    current1 = valores.get('current1')
+                    current2 = valores.get('current2')
+                    conexion = valores.get('conexion')
+                    now = datetime.now()
+
+                    # 1. Intentar INSERT. Si hay conflicto, UPDATE preservando datos existentes si los nuevos son NULL/vacíos
+                    cur.execute("""
+                        INSERT INTO battery_telemetry (
+                            device_id, soc, carga, descarga, voltaje, svoltage, 
+                            current1, current2, ultimo_update, sitio, nombre, conexion
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (device_id, nombre) DO UPDATE SET
+                            soc = COALESCE(EXCLUDED.soc, battery_telemetry.soc),
+                            carga = COALESCE(EXCLUDED.carga, battery_telemetry.carga),
+                            descarga = COALESCE(EXCLUDED.descarga, battery_telemetry.descarga),
+                            voltaje = COALESCE(EXCLUDED.voltaje, battery_telemetry.voltaje),
+                            svoltage = COALESCE(EXCLUDED.svoltage, battery_telemetry.svoltage),
+                            current1 = COALESCE(EXCLUDED.current1, battery_telemetry.current1),
+                            current2 = COALESCE(EXCLUDED.current2, battery_telemetry.current2),
+                            conexion = COALESCE(EXCLUDED.conexion, battery_telemetry.conexion),
+                            ultimo_update = EXCLUDED.ultimo_update,
+                            nombre = EXCLUDED.nombre,
+                            sitio = COALESCE(NULLIF(EXCLUDED.sitio, ''), battery_telemetry.sitio)
+                    """, (device_id, soc, carga, descarga, voltaje, svoltage, 
+                          current1, current2, now, sitio, nombre, conexion))
+                
+        except Exception as e:
+            logging.error(f"Error en batch UPSERT: {e}")
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def _procesar_telemetria_dispositivo(device_id, valores, sitio, nombre_base):
+        """Transforma los valores brutos en una lista de registros para el batch update."""
+        registros = []
+        
+        # Check if it's a ZTE battery by looking for soc_1 or other ZTE specific fields
+        is_zte = any(valores.get(f'soc_{i}') is not None or valores.get(f'cur_{i}') is not None for i in range(1, 5))
+        
+        if is_zte:
+            for i in range(1, 5):
+                soc = valores.get(f'soc_{i}')
+                cur = valores.get(f'cur_{i}')
+                conexion = valores.get('conexion')
+                if soc is not None or cur is not None:
+                    # ID único para cada batería en el grupo
+                    bat_id = f"{device_id}_{i}"
+                    bat_nombre = f"Bateria ZTE {i}"
+                    # Valores específicos para esta batería
+                    bat_valores = valores.copy()
+                    bat_valores['soc'] = soc
+                    bat_valores['current1'] = cur
+                    bat_valores['conexion'] = conexion
+                    registros.append((bat_id, bat_valores, sitio, bat_nombre))
+        else:
+            # Litio u otros (usar valores tal cual)
+            registros.append((device_id, valores, sitio, nombre_base))
+            
+        return registros
+
+    @staticmethod
+    def cleanup_db():
+        """Elimina alarmas antiguas de la tabla histórica."""
+        with MonitoringService._cleanup_lock:
+            # Evitar ejecuciones muy frecuentes
+            now = datetime.now()
+            if MonitoringService._last_cleanup and (now - MonitoringService._last_cleanup).total_seconds() < 3600:
+                return
+            
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                # Mantener solo 7 días de historial
+                limit_date = now - timedelta(days=7)
+                
+                cur.execute("DELETE FROM alarmas_historicas WHERE hora < %s", (limit_date,))
+                deleted_rows = cur.rowcount
+                
+                if deleted_rows > 0:
+                    logging.debug(f"DB Cleanup: Eliminadas {deleted_rows} alarmas antiguas de alarmas_historicas.")
+                
+                conn.commit()
+                MonitoringService._last_cleanup = now
+            except Exception as e:
+                logging.error(f"Error en limpieza automática de DB: {e}")
+                if conn: conn.rollback()
+            finally:
+                if conn: conn.close()
+
+    @staticmethod
+    def actualizar_telemetria_bateria(device_id, valores, sitio=None, nombre=None):
+        MonitoringService.actualizar_telemetria_bateria_batch([(device_id, valores, sitio, nombre)])
+
+    @staticmethod
+    def monitorear_tipo(app, db_type):
+        logging.info(f"Iniciando monitoreo de {db_type}...")
+        
+        with app.app_context():
+            while True:
+                try:
+                    # Recargar tokens del disco por si hubo cambios manuales
+                    from app.utils.constants import load_dynamic_tokens
+                    load_dynamic_tokens()
+                    
+                    any_success = False
+                    if db_type in CONFIG_REGIONES:
+                        for region, cfg in CONFIG_REGIONES[db_type].items():
+                            try:
+                                alarmas = MonitoringService.obtener_alarmas(cfg["url"], cfg["cookies"], region=region, db_type=db_type)
+                            except AuthFailureException as ae:
+                                logging.warning(f"⚠️ Token expirado para {ae.region} ({ae.segment}). Iniciando renovación automática...")
+                                from app.services.login_service import LoginService
+                                login_service = LoginService()
+                                new_token = asyncio.run(login_service.refresh_token(ae.segment, ae.region, ae.url_base))
+                                if new_token:
+                                    logging.warning(f"✅ Token renovado exitosamente para {ae.region} ({ae.segment})")
+                                    # Esperar un momento para propagación de sesión
+                                    time.sleep(2) 
+                                    cfg["cookies"]["PEIMWEBID"] = new_token
+                                    try:
+                                        alarmas = MonitoringService.obtener_alarmas(cfg["url"], cfg["cookies"], region=region, db_type=db_type)
+                                    except Exception as e2:
+                                        logging.error(f"❌ Reintento fallido tras renovación para {ae.region}: {e2}")
+                                        alarmas = None
+                                else:
+                                    logging.error(f"❌ Falló la renovación automática para {ae.region}")
+                                    alarmas = None
+                            
+                            if alarmas is not None:
+                                any_success = True
+                                MonitoringService.guardar_alarmas(db_type, alarmas, region, is_ac=False)
+                                if alarmas:
+                                    logging.debug(f"[{db_type.upper()}] Actualizadas {len(alarmas)} alarmas de {region}")
+                                    
+                                    # Procesar telemetria para alarmas de bateria - REMOVIDO (Ahora lo hace el hilo global)
+                                    pass
+                            else:
+                                logging.warning(f"[{db_type.upper()}] Saltando actualización {region} por error de red")
+                        
+                        if any_success:
+                            eventos = MonitoringService.obtener_eventos_cumplidos(db_type)
+                            sitios_activos = [e["sitio"] for e in eventos]
+                            
+                            try:
+                                conn = get_db_connection()
+                                # PostgreSQL starts transaction with 'with conn:'
+                                with conn:
+                                    cur = conn.cursor()
+                                    ahora_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    
+                                    # Marcar sitios desaparecidos para el cooldown de 1 min
+                                    if sitios_activos:
+                                        placeholders = ', '.join(['%s'] * len(sitios_activos))
+                                        cur.execute(
+                                            f"UPDATE notificaciones_enviadas SET resuelto_desde=%s WHERE tipo_sistema=%s AND resuelto_desde IS NULL AND sitio NOT IN ({placeholders})",
+                                            (ahora_str, db_type, *sitios_activos)
+                                        )
+                                    else:
+                                        cur.execute(
+                                            "UPDATE notificaciones_enviadas SET resuelto_desde=%s WHERE tipo_sistema=%s AND resuelto_desde IS NULL",
+                                            (ahora_str, db_type)
+                                        )
+                                    
+                                    # Resetear cooldown si reaparecen
+                                    if sitios_activos:
+                                        placeholders = ', '.join(['%s'] * len(sitios_activos))
+                                        cur.execute(
+                                            f"UPDATE notificaciones_enviadas SET resuelto_desde=NULL WHERE tipo_sistema=%s AND sitio IN ({placeholders})",
+                                            (db_type, *sitios_activos)
+                                        )
+                                    
+                                    # Eliminar solo si pasó > 60s
+                                    limite_cooldown = (datetime.now() - timedelta(seconds=60)).strftime("%Y-%m-%d %H:%M:%S")
+                                    cur.execute(
+                                        "DELETE FROM notificaciones_enviadas WHERE tipo_sistema=%s AND resuelto_desde IS NOT NULL AND resuelto_desde < %s",
+                                        (db_type, limite_cooldown)
+                                    )
+                                # Commit occurs automatically if no exception
+                            except Exception as e:
+                                logging.error(f"Error procesando ciclo notificaciones: {e}")
+                            finally:
+                                if 'conn' in locals() and conn: conn.close()
+                                
+                            MonitoringService.procesar_nuevos_eventos(eventos, db_type)
+                except Exception as e:
+                    logging.error(f"Error en monitorear_tipo ({db_type}): {e}")
+                
+                # Ejecutar limpieza cada 30 min aprox
+                trigger_cleanup = False
+                with MonitoringService._cleanup_lock:
+                    if MonitoringService._last_cleanup is None or \
+                       (datetime.now() - MonitoringService._last_cleanup).total_seconds() > 1800:
+                        MonitoringService._last_cleanup = datetime.now()
+                        trigger_cleanup = True
+                
+                if trigger_cleanup:
+                    MonitoringService.cleanup_db()
+
+                time.sleep(15) # Aumentado a 15s para reducir carga constante
+                
+    @staticmethod
+    def buscar_baterias_en_precinto(ip, cookies, precinct_id):
+        """Busca baterías en un precinto/estación"""
+        url = f"http://{ip}:8090/peim/request/region/getDeviceTree"
+        headers = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        
+        params = {
+            "tree_type": 0,
+            "id": precinct_id,
+            "node_type_show": 3,
+            "_": int(time.time() * 1000)
+        }
+        
+        try:
+            session = MonitoringService._get_session()
+            with session.get(url, headers=headers, cookies=cookies, params=params, timeout=30) as resp:
+                resp.raise_for_status()
+                data = resp.json()
+            
+                baterias = []
+            if data.get("success"):
+                for item in data.get("info", []):
+                    # Broaden search to Lithium (47)
+                    if item.get("device_type") == "47":
+                        baterias.append({
+                            "device_id": item.get("device_id"),
+                            "device_name": item.get("device_name", "Batería de Litio"),
+                            "type": "litio"
+                        })
+                    # SNMP discovery (38) for ZTE (32)
+                    elif item.get("device_type") == "38" and "SNMP" in str(item.get("device_name", "")):
+                        snmp_id = item.get("device_id")
+                        # Nested search within SNMP
+                        params_zte = params.copy()
+                        params_zte["id"] = snmp_id
+                        with session.get(url, headers=headers, cookies=cookies, params=params_zte, timeout=10) as resp_zte:
+                            if resp_zte.status_code == 200:
+                                data_zte = resp_zte.json()
+                                if data_zte.get("success"):
+                                    for item_zte in data_zte.get("info", []):
+                                        if item_zte.get("device_type") == "32":
+                                            baterias.append({
+                                                "device_id": item_zte.get("device_id"),
+                                                "device_name": item_zte.get("device_name", "Batería ZTE"),
+                                                "type": "zte"
+                                            })
+                    # Direct search for Type 32, 2, 6 as backup
+                    elif item.get("device_type") in ["32", "2", "6"]:
+                         baterias.append({
+                            "device_id": item.get("device_id"),
+                            "device_name": item.get("device_name", "Batería"),
+                            "type": "zte" if item.get("device_type") == "32" else "other"
+                        })
+            return baterias
+        except Exception as e:
+            logging.error(f"Error buscando baterias en precinto {precinct_id}: {e}")
+            return []
+
+    @staticmethod
+    def monitorear_fallas_ac(app):
+        logging.info("Iniciando monitoreo de fallas de red eléctrica...")
+        
+        with app.app_context():
+            while True:
+                try:
+                    # Recargar tokens del disco por si hubo cambios manuales
+                    from app.utils.constants import load_dynamic_tokens
+                    load_dynamic_tokens()
+                    
+                    for db_type in ["access", "transport"]:
+                        if db_type in CONFIG_REGIONES:
+                            for region, cfg in CONFIG_REGIONES[db_type].items():
+                                url = cfg["url"]
+                                cookies = cfg["cookies"].copy()
+                                cookies.update({"loginUser": "yuri.carrasco"})
+                                
+                                parsed_url = urlparse(url)
+                                ip = parsed_url.hostname
+                                
+                                try:
+                                    try:
+                                        alarmas = MonitoringService.obtener_alarmas(url, cookies, ALARM_TEMPLATE_AC)
+                                    except AuthFailureException as ae:
+                                        logging.warning(f"⚠️ [AC] Token expirado para {ae.region} ({ae.segment}). Iniciando renovación automática...")
+                                        from app.services.login_service import LoginService
+                                        login_service = LoginService()
+                                        new_token = asyncio.run(login_service.refresh_token(ae.segment, ae.region, ae.url_base))
+                                        if new_token:
+                                            logging.warning(f"✅ [AC] Token renovado exitosamente para {ae.region} ({ae.segment})")
+                                            # Esperar un momento para propagación de sesión
+                                            time.sleep(2)
+                                            # Actualizar el token en el diccionario local de cookies y en CONFIG_REGIONES
+                                            cookies["PEIMWEBID"] = new_token
+                                            cfg["cookies"]["PEIMWEBID"] = new_token 
+                                            try:
+                                                alarmas = MonitoringService.obtener_alarmas(url, cookies, ALARM_TEMPLATE_AC)
+                                            except Exception as e2:
+                                                logging.error(f"❌ [AC] Reintento fallido tras renovación para {ae.region}: {e2}")
+                                                alarmas = None
+                                        else:
+                                            alarmas = None
+                                        
+                                    if alarmas is not None:
+                                        processed_alarms = []
+                                        for a in alarmas:
+                                            # Priorizar el valor que ya trae la alarma (meteValue)
+                                            mete_val = a.get("meteValue")
+                                            if mete_val is not None:
+                                                try: a["valor"] = float(mete_val)
+                                                except: a["valor"] = None
+                                            
+                                            # Solo si no hay meteValue o queremos reforzar, buscamos realtime
+                                            if a.get("valor") is None:
+                                                device_id = a.get("device_id")
+                                                if device_id:
+                                                    valores_bat = MonitoringService.obtener_valores_dispositivo(ip, device_id, cookies)
+                                                    a["valor"] = valores_bat.get("voltaje")
+                                            processed_alarms.append(a)
+                                        
+                                        # Always call guardar_alarmas to clear stale ones if list is empty
+                                        MonitoringService.guardar_alarmas(db_type, processed_alarms, region, is_ac=True)
+                                        
+                                        # Telemetría ahora se encarga el hilo global por ahora.
+                                except Exception as e:
+                                    logging.error(f"Error en monitoreo AC ({db_type} - {region}): {e}")
+                except Exception as e:
+                    logging.error(f"Error general en monitoreo AC: {e}")
+                
+                time.sleep(5)
+
+    @staticmethod
+    def get_cached_dashboard_state():
+        """Retorna el estado del dashboard desde la memoria."""
+        with MonitoringService._dashboard_lock:
+            return MonitoringService._dashboard_state
+
+    @staticmethod
+    def _refresh_dashboard_cache_loop(app):
+        """Hilo dedicado a refrescar el estado del dashboard en memoria."""
+        with app.app_context():
+            contador = 0
+            while True:
+                try:
+                    # Cada 10 ciclos (30s aprox) incluimos anomalías
+                    incluir_anomalias = (contador % 10 == 0)
+                    
+                    new_state = MonitoringService._calculate_dashboard_state(incluir_anomalias)
+                    
+                    with MonitoringService._dashboard_lock:
+                        # Si no incluimos anomalías, mantenemos las anteriores
+                        if not incluir_anomalias and MonitoringService._dashboard_state:
+                            new_state['access']['anomalias'] = MonitoringService._dashboard_state['access']['anomalias']
+                            new_state['transport']['anomalias'] = MonitoringService._dashboard_state['transport']['anomalias']
+                            
+                        MonitoringService._dashboard_state = new_state
+                        MonitoringService._last_dashboard_update = datetime.now()
+                    
+                    contador += 1
+                    time.sleep(3)
+                except Exception as e:
+                    logging.error(f"Error en loop de cache: {e}")
+                    time.sleep(5)
+
+    @staticmethod
+    def _calculate_dashboard_state(include_anomalias=True):
+        """Calcula el estado completo del dashboard."""
+        from app.services.camera_service import CameraService
+        
+        datos_access = MonitoringService.obtener_datos_completos_v2("access", include_anomalias)
+        datos_transport = MonitoringService.obtener_datos_completos_v2("transport", include_anomalias)
+        
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT site, ip FROM access_cameras")
+            access_cameras = [{"site": row[0], "ip": row[1]} for row in cur.fetchall()]
+            cur.execute("SELECT site, position, ip FROM transport_cameras")
+            transport_cameras = [{"site": row[0], "position": row[1], "ip": row[2]} for row in cur.fetchall()]
+            
+            cur.execute("SELECT COUNT(DISTINCT sitio) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'AC_FAIL'")
+            ac_count = cur.fetchone()[0]
+            
+            # Contar dispositivos únicos con alarma (igual que la pantalla de Battery)
+            cur.execute("""
+                SELECT COUNT(DISTINCT device_id)
+                FROM alarmas_activas WHERE estado = 'on' AND categoria = 'BATERIA BAJA'
+            """)
+            bat_alerts = cur.fetchone()[0]
+            # HVAC Count
+            from app.services.hvac_service import HvacService
+            hvac_data = HvacService.get_current_data()
+            hvac_count = 0
+            for r in hvac_data:
+                if r.get("aires"):
+                    hvac_count += len(r["aires"])
+                    
+        finally:
+            conn.close()
+
+        return {
+            'access': datos_access,
+            'transport': datos_transport,
+            'ac_failures_count': ac_count,
+            'battery_alerts_count': bat_alerts,
+            'hvac_total_count': hvac_count,
+            'cameras': {'access': access_cameras, 'transport': transport_cameras},
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'connection_errors': MonitoringService._connection_errors
+        }
+
+    @staticmethod
+    def obtener_datos_completos_v2(db_type, include_anomalias=True):
+        """Replica la lógica de 'obtener_datos_completos' de api.py de forma eficiente."""
+        # 1. Obtener eventos activos
+        eventos = MonitoringService.obtener_eventos_cumplidos(db_type)
+        
+        anomalias = []
+        if not include_anomalias:
+            return {"eventos": eventos, "anomalias": []}
+
+        # 2. Obtener anomalías (Alarmas con > 5 repeticiones en 24h)
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        ahora = datetime.now()
+        limite_24h = ahora - timedelta(hours=24)
+        limite_str = limite_24h.strftime("%Y-%m-%d %H:%M:%S")
+        
+        anomalias = []
+        try:
+            # UNION de activas e históricas para detectar anomalías en las últimas 24h
+            cur.execute("""
+                SELECT sitio, categoria, alarma, COUNT(*) as repeticiones, MAX(hora) as ultima_vez
+                FROM (
+                    SELECT sitio, categoria, alarma, hora FROM alarmas_activas 
+                    WHERE tipo=%s AND hora >= %s 
+                    AND categoria NOT IN ('AC_FAIL', 'BATERIA BAJA', 'BATERIA')
+                    UNION ALL
+                    SELECT sitio, categoria, alarma, hora FROM alarmas_historicas 
+                    WHERE tipo=%s AND hora >= %s 
+                    AND categoria NOT IN ('AC_FAIL', 'BATERIA BAJA', 'BATERIA')
+                ) combined_alarms
+                GROUP BY sitio, categoria, alarma
+                HAVING COUNT(*) > 5
+            """, (db_type, limite_str, db_type, limite_str))
+            
+            filas_anomalias = cur.fetchall()
+            
+            for row in filas_anomalias:
+                # Handling both RealDictCursor and Tuple
+                if isinstance(row, dict):
+                    sitio, categoria, alarma, repeticiones, ultima_vez = row['sitio'], row['categoria'], row['alarma'], row['repeticiones'], row['ultima_vez']
+                else:
+                    sitio, categoria, alarma, repeticiones, ultima_vez = row
+                
+                if isinstance(ultima_vez, datetime):
+                    ultima_vez_str = ultima_vez.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    ultima_vez_str = ultima_vez
+
+                if db_type == "transport":
+                    transport_cameras = CameraService.get_transport_cameras_for_site(sitio)
+                    has_cam = len(transport_cameras) > 0
+                    cameras_info = {
+                        "has_camera": has_cam,
+                        "cameras": transport_cameras,
+                        "available_positions": list(transport_cameras.keys())
+                    }
+                else:
+                    has_cam = CameraService.has_camera(sitio, "access")
+                    cameras_info = {"has_camera": has_cam}
+                
+                anomalias.append({
+                    "sitio": sitio,
+                    "categoria": categoria,
+                    "alarmameta": alarma,
+                    "veces": repeticiones,
+                    "ultima_vez": ultima_vez_str,
+                    "cameras": cameras_info
+                })
+        finally:
+            conn.close()
+            
+        return {
+            "eventos": eventos,
+            "anomalias": anomalias
+        }
+
+    @staticmethod
+    def start_monitoring_threads(app):
+        MonitoringService._init_db_notifications()
+        
+        thread_access = threading.Thread(target=MonitoringService.monitorear_tipo, args=(app, "access"))
+        thread_access.daemon = True
+        thread_access.start()
+
+        thread_transport = threading.Thread(target=MonitoringService.monitorear_tipo, args=(app, "transport"))
+        thread_transport.daemon = True
+        thread_transport.start()
+
+        thread_ac = threading.Thread(target=MonitoringService.monitorear_fallas_ac, args=(app,))
+        thread_ac.daemon = True
+        thread_ac.start()
+
+        # Nuevo hilo para refresco de dashboard
+        thread_dash = threading.Thread(target=MonitoringService._refresh_dashboard_cache_loop, args=(app,))
+        thread_dash.daemon = True
+        thread_dash.start()
+
+        # NUEVO: Hilo de telemetría global (cada 60s)
+        thread_telemetry = threading.Thread(target=MonitoringService.monitorear_telemetria_global, args=(app,))
+        thread_telemetry.daemon = True
+        thread_telemetry.start()
+
+    @staticmethod
+    def monitorear_telemetria_global(app):
+        """Monitorea todos los dispositivos del catálogo cada 60 segundos."""
+        logging.info("🔋 [Telemetry] Iniciando recolección global (Catálogo)...")
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from urllib.parse import urlparse
+        
+        with app.app_context():
+            while True:
+                try:
+                    inicio = time.time()
+                    conn = get_db_connection()
+                    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    cur.execute("""
+                        SELECT sitio, region, device_id, nombre_dispositivo as nombre, 
+                               tipo_dispositivo, tipo_sistema
+                        FROM catalogo_dispositivos 
+                        WHERE activo = TRUE AND tipo_dispositivo IN ('litio', 'zte', 'rectificador')
+                    """)
+                    dispositivos = cur.fetchall()
+                    conn.close()
+
+                    if not dispositivos:
+                        logging.warning("🔋 [Telemetry] No se encontraron dispositivos activos en el catálogo.")
+                        time.sleep(60)
+                        continue
+
+                    logging.info(f"🔋 [Telemetry] Procesando {len(dispositivos)} dispositivos del catálogo...")
+                    
+                    # Procesar en fragmentos (chunks) para no saturar la cola de sockets de Windows
+                    batch_total = []
+                    chunk_size = 100
+                    for i in range(0, len(dispositivos), chunk_size):
+                        chunk = dispositivos[i : i + chunk_size]
+                        with ThreadPoolExecutor(max_workers=30) as executor:
+                            futures = {}
+                            for d in chunk:
+                                did = str(d['device_id']).strip().zfill(16)
+                                tipo_sis = d['tipo_sistema']
+                                region = d['region']
+                                from app.utils.constants import CONFIG_REGIONES
+                                cfg = CONFIG_REGIONES.get(tipo_sis, {}).get(region)
+                                
+                                if cfg:
+                                    parsed = urlparse(cfg["url"])
+                                    ip = parsed.hostname
+                                    future = executor.submit(MonitoringService.obtener_valores_dispositivo, ip, did, cfg["cookies"])
+                                    futures[future] = (did, d['sitio'], d['nombre'])
+                            
+                            for future in as_completed(futures):
+                                did, sitio, nombre = futures[future]
+                                try:
+                                    valores = future.result(timeout=30)
+                                    if valores:
+                                        batch_total.extend(MonitoringService._procesar_telemetria_dispositivo(did, valores, sitio, nombre))
+                                except Exception as e:
+                                    logging.error(f"Error en telemetría para {did}: {e}")
+                        
+                        # Pequeña pausa entre chunks para dejar respirar al stack TCP
+                        if i + chunk_size < len(dispositivos):
+                            time.sleep(1)
+
+                    if batch_total:
+                        MonitoringService.actualizar_telemetria_bateria_batch(batch_total)
+                        logging.info(f"✅ [Telemetry] Actualizados {len(batch_total)} registros. Tiempo: {time.time()-inicio:.1f}s")
+
+                except Exception as e:
+                    logging.error(f"Error en monitorear_telemetria_global: {e}")
+                
+                time.sleep(90)

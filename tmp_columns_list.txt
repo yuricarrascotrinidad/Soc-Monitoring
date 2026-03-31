@@ -1,0 +1,15 @@
+id
+tipo
+region
+hora
+duracion
+sitio
+alarma
+devicename
+precinct_id
+mete_name
+categoria
+estado
+device_id
+valor
+limbo_desde

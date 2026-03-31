@@ -1,0 +1,62 @@
+{
+    "transport": {
+        "San Martin": {
+            "url": "http://10.255.31.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "D6670318F7FB214AFC8F8B74E4333CD0"
+            },
+            "last_renewed": "2026-03-30 09:19:49"
+        },
+        "Ancash": {
+            "url": "http://10.255.1.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "2EAD80982820E69FE338BE5695F707F3"
+            },
+            "last_renewed": "2026-03-23 15:49:49"
+        },
+        "Arequipa": {
+            "url": "http://10.255.11.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "0675BAB28FD362D5D6BDD534F7E60D8E"
+            },
+            "last_renewed": "2026-03-27 15:47:54"
+        },
+        "La Libertad": {
+            "url": "http://10.255.21.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "EA07691F1658E89C7DF4B4B647EA11FA"
+            },
+            "last_renewed": "2026-03-17 03:25:20"
+        }
+    },
+    "access": {
+        "Ancash": {
+            "url": "http://10.254.1.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "8AB0B04FBAFA32A2A2B4E7BBEC28DE54"
+            },
+            "last_renewed": "2026-03-30 18:26:15"
+        },
+        "Arequipa": {
+            "url": "http://10.254.11.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "7805122DF6621FCE75F5FBFB8999CC09"
+            },
+            "last_renewed": "2026-03-30 13:16:01"
+        },
+        "La Libertad": {
+            "url": "http://10.254.21.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "3507F2FF5F0ABEC56BD04C4BBBA32B05"
+            },
+            "last_renewed": "2026-03-25 10:34:12"
+        },
+        "San Martin": {
+            "url": "http://10.254.31.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "DC3FD5C8632E2E6DCF03C5181C429386"
+            },
+            "last_renewed": "2026-03-24 09:19:02"
+        }
+    }
+}

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cámara Acceso: {{ site_name }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        h1 {
+            color: #333;
+            margin: 0;
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .back-btn:hover {
+            background: #5a67d8;
+        }
+
+        .camera-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .video-container {
+            text-align: center;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .video-container img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .control-btn {
+            padding: 10px 20px;
+            background: #48bb78;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .control-btn:hover {
+            background: #38a169;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            background: #c6f6d5;
+            color: #22543d;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📹 Cámara de Acceso: {{ site_name }}</h1>
+            <a href="/camera_list" class="back-btn">← Ver todas las cámaras</a>
+        </div>
+
+        <div class="camera-info">
+            <h3>Información de la Cámara</h3>
+            <p><strong>Sitio:</strong> {{ site_name }}</p>
+            <p><strong>Tipo:</strong> Acceso</p>
+            <p><strong>Dirección IP:</strong> {{ ip }}</p>
+            <p><strong>Estado:</strong> <span style="color: #48bb78;">● Conectado</span></p>
+        </div>
+
+        <div class="video-container">
+            <img src="/video_feed/{{ site_name }}" alt="Video en vivo de {{ site_name }}" width="900" height="500">
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" onclick="location.reload()">⟳ Actualizar</button>
+            <button class="control-btn" onclick="window.open('/video_feed/{{ site_name }}', '_blank')">
+                📺 Abrir en nueva pestaña
+            </button>
+            <button class="control-btn" onclick="window.open('/', '_blank')">
+                📊 Volver al Dashboard
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh si la imagen falla
+        document.querySelector('img').onerror = function () {
+            console.log('Error cargando video, intentando reconectar...');
+            setTimeout(function () {
+                location.reload();
+            }, 3000);
+        };
+
+        // Actualizar cada 5 minutos para mantener la conexión
+        setInterval(function () {
+            console.log('Manteniendo conexión de video...');
+            document.querySelector('img').src = document.querySelector('img').src;
+        }, 300000);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,27 @@
+23:15:09 [ERROR] root: Error actualizando telemetría de batería en batch: se ha detectado un deadlock
+DETAIL:  El proceso 11796 espera ShareLock en transacción 1563311; bloqueado por proceso 24620.
+El proceso 24620 espera ShareLock en transacción 1563310; bloqueado por proceso 11796.
+HINT:  Vea el registro del servidor para obtener detalles de las consultas.
+CONTEXT:  mientras se actualizaba la tupla (24,53) en la relación «battery_telemetry»
+
+DETAIL:  El proceso 10128 espera ShareLock en transacción 1556332; bloqueado por proceso 288.
+El proceso 288 espera ShareLock en transacción 1556331; bloqueado por proceso 10128.
+HINT:  Vea el registro del servidor para obtener detalles de las consultas.
+CONTEXT:  mientras se actualizaba la tupla (22,75) en la relación «battery_telemetry»
+
+
+
+
+
+"Ancash": {
+            "url": "http://10.254.1.135:8090/peim/request/alarm/queryAlarm",
+            "cookies": {
+                "PEIMWEBID": "264F83D9E6EA7F370B10E5E926D987F9"
+            },
+            "last_renewed": "2026-03-13 09:29:19"
+        },
+
+
+
+
+        "Ancash": {"url": "http://10.254.1.135:8090/peim/request/alarm/queryAlarm", "cookies": {"PEIMWEBID": ""}},

@@ -1,0 +1,37 @@
+
+--- Schema for battery_telemetry ---
+('device_id', 'text')
+('soc', 'double precision')
+('carga', 'double precision')
+('descarga', 'double precision')
+('ultimo_update', 'timestamp without time zone')
+('sitio', 'text')
+('nombre', 'text')
+('voltaje', 'double precision')
+('svoltage', 'double precision')
+('current1', 'double precision')
+('current2', 'double precision')
+('conexion', 'integer')
+
+--- Schema for catalogo_dispositivos ---
+('id', 'integer')
+('sitio', 'character varying')
+('region', 'character varying')
+('device_id', 'text')
+('nombre_dispositivo', 'character varying')
+('device_type', 'integer')
+('tipo_dispositivo', 'character varying')
+('tipo_sistema', 'character varying')
+('parent_device_id', 'character varying')
+('fecha_descubrimiento', 'timestamp without time zone')
+('activo', 'boolean')
+
+--- Constraints on battery_telemetry ---
+
+--- Sample data from catalogo_dispositivos (limit 5) ---
+['id', 'sitio', 'region', 'device_id', 'nombre_dispositivo', 'device_type', 'tipo_dispositivo', 'tipo_sistema', 'parent_device_id', 'fecha_descubrimiento', 'activo']
+(75083, 'A1001_AR_NOC_AREQUIPA', 'Arequipa', '00001006000000000299', 'Rect1-Baterias de Litio 1', 47, 'litio', 'access', None, datetime.datetime(2026, 3, 19, 12, 42, 20, 466152), True)
+(75084, 'A1001_AR_NOC_AREQUIPA', 'Arequipa', '00001006000000000297', 'Rect1-Baterias de Litio 2', 47, 'litio', 'access', None, datetime.datetime(2026, 3, 19, 12, 42, 20, 466152), True)
+(75085, 'A1001_AR_NOC_AREQUIPA', 'Arequipa', '00001006000000000301', 'Rect1-Baterias de Litio 3', 47, 'litio', 'access', None, datetime.datetime(2026, 3, 19, 12, 42, 20, 466152), True)
+(75086, 'A1001_AR_NOC_AREQUIPA', 'Arequipa', '00001006000000000296', 'Rect1-Baterias de Litio 4', 47, 'litio', 'access', None, datetime.datetime(2026, 3, 19, 12, 42, 20, 466152), True)
+(75087, 'A1001_AR_NOC_AREQUIPA', 'Arequipa', '00001006000000000293', 'Rect1-Baterias de Litio 5', 47, 'litio', 'access', None, datetime.datetime(2026, 3, 19, 12, 42, 20, 466152), True)

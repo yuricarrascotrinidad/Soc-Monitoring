@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SOC{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header">
+        <h1 id="siDtitle">YOFC <span class="soc">SOC Dashboard</span></h1>
+        <p>Real-time surveillance system - Alarms and Cameras</p>
+        <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <!-- ESTADÍSTICAS RÁPIDAS -->
+    <div class="stats-grid">
+        <div class="stat-card access">
+            <h3>Access Alarms</h3>
+            <div class="stat-value" id="access-events-count">...</div>
+            <p>Active events</p>
+            <div class="stat-value" id="access-anomalies-count">...</div>
+            <p>Detected anomalies</p>
+        </div>
+
+        <div class="stat-card transport">
+            <h3>Transport Alarms</h3>
+            <div class="stat-value" id="transport-events-count">...</div>
+            <p>Active events</p>
+            <div class="stat-value" id="transport-anomalies-count">...</div>
+            <p>Detected anomalies</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Cameras</h3>
+            <div class="stat-value" id="cameras-access-count">...</div>
+            <p>Access</p>
+            <div class="stat-value" id="cameras-transport-count">...</div>
+            <p>Transport</p>
+            <button onclick="window.location.href='/camera_list'" class="refresh-btn" style="margin-top: 10px;">
+                View all cameras
+            </button>
+        </div>
+
+        <div class="stat-card">
+            <h3>🔄 System status</h3>
+            <div class="stat-value">✓</div>
+            <p>Working</p>
+            <button onclick="refreshData()" class="refresh-btn" style="margin-top: 10px;">
+                Refresh Data
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTENIDO DINÁMICO POR MÓDULO -->
+    <div id="module-content">
+        <!-- Dashboard Principal (por defecto) -->
+        <div class="module-section" id="dashboard-content">
+            <div class="content-grid">
+                <!-- SECCIÓN ACCESS -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Access System</h2>
+                        <button onclick="refreshData()" class="refresh-btn">🔄 Refresh</button>
+                    </div>
+
+                    <h3>Completed Events</h3>
+                    <div class="events-list" id="access-events">
+                        <!-- Los eventos se cargarán aquí -->
+                    </div>
+
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 10px;">
+                        <h3 style="margin: 0;">Detected Anomalies</h3>
+                        <button onclick="exportarExcel('access')" class="export-btn"
+                            style="background: var(--success-color); color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; transition: background 0.3s;">
+                            📊 Exportar Excel
+                        </button>
+                    </div>
+                    <div class="anomalies-list" id="access-anomalies">
+                        <!-- Las anomalías se cargarán aquí -->
+                    </div>
+                </div>
+
+                <!-- SECCIÓN TRANSPORT -->
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Transport System</h2>
+                        <button onclick="refreshData()" class="refresh-btn">🔄 Refresh</button>
+                    </div>
+
+                    <h3>Completed Events</h3>
+                    <div class="events-list" id="transport-events">
+                        <!-- Los eventos se cargarán aquí -->
+                    </div>
+
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 10px;">
+                        <h3 style="margin: 0;">Detected Anomalies</h3>
+                        <button onclick="exportarExcel('transport')" class="export-btn"
+                            style="background: var(--success-color); color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; transition: background 0.3s;">
+                            📊 Exportar Excel
+                        </button>
+                    </div>
+                    <div class="anomalies-list" id="transport-anomalies">
+                        <!-- Las anomalías se cargarán aquí -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contenido de otros módulos (inicialmente oculto) -->
+        <div class="module-section" id="other-modules-content" style="display: none;">
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title" id="module-title">Selected Module</h2>
+                </div>
+                <div id="module-details">
+                    <!-- El contenido específico del módulo se cargará aquí -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div>
+            <a href="/estado" target="_blank">System status</a>
+            <a href="/datos" target="_blank">API of Data</a>
+            <a href="/cameras" target="_blank">API of Cameras</a>
+            <a href="javascript:void(0)" onclick="refreshData()">Refresh</a>
+        </div>
+        <div class="timestamp" id="footer-timestamp"></div>
+    </div>
+</div>
+
+<!-- Modal para ver cámara -->
+<div class="camera-modal" id="cameraModal">
+    <div class="camera-modal-content">
+        <div class="camera-modal-header">
+            <h3 id="modalTitle">Live Camera</h3>
+            <button class="close-modal" onclick="closeCameraModal()">×</button>
+        </div>
+        <div class="camera-modal-body">
+            <div class="camera-stream">
+                <img id="cameraStream" src="" alt="Video en vivo" style="max-width: 100%; max-height: 100%;">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
