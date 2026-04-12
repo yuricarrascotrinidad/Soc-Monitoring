@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/static/images/icon.png" type="image/png">
     <title>{% block title %}Dashboard{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=2.2">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=2.4">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Permitir estilos extra por página -->
@@ -125,7 +125,10 @@
 
 <body>
     <!-- MENÚ LATERAL DE MÓDULOS -->
-    <div class="sidebar">
+    <div class="sidebar" id="mainSidebar">
+        <button class="sidebar-toggle" id="sidebarToggle" title="Colapsar menú">
+            <i class="fas fa-chevron-left"></i>
+        </button>
         <div class="sidebar-header">
             <h2 id="sidtitle">
                 <span class="yof">YOFC</span><span class="soc">SOC</span>
@@ -140,19 +143,23 @@
             <div class="module-group">
                 <div class="module-group-title">ALARMS</div>
                 <div class="module-group-content">
-                    <div class="module-item active" data-module="dashboard" onclick="goToAlarms()">
+                    <div class="module-item active" data-module="dashboard" onclick="goToAlarms()" title="Alarms">
+                        <i class="fas fa-bell module-icon"></i>
                         <div class="module-name">Alarms</div>
                         <div class="module-badge" id="total-alarms">...</div>
                     </div>
-                    <div class="module-item" data-module="access-alarms">
+                    <div class="module-item" data-module="access-alarms" title="Access">
+                        <i class="fas fa-building module-icon"></i>
                         <div class="module-name">Access</div>
                         <div class="module-badge" id="access-alarms-count">...</div>
                     </div>
-                    <div class="module-item" data-module="transport-alarms">
+                    <div class="module-item" data-module="transport-alarms" title="Transport">
+                        <i class="fas fa-truck module-icon"></i>
                         <div class="module-name">Transport</div>
                         <div class="module-badge" id="transport-alarms-count">...</div>
                     </div>
-                    <div class="module-item" data-module="anomalies">
+                    <div class="module-item" data-module="anomalies" title="Anomalías">
+                        <i class="fas fa-exclamation-triangle module-icon"></i>
                         <div class="module-name">Anomalías</div>
                         <div class="module-badge" id="anomalies-count">...</div>
                     </div>
@@ -163,15 +170,18 @@
             <div class="module-group">
                 <div class="module-group-title">CAMERAS</div>
                 <div class="module-group-content">
-                    <div class="module-item" data-module="camera-list" onclick="window.location.href='/camera_list'">
+                    <div class="module-item" data-module="camera-list" onclick="window.location.href='/camera_list'" title="Camera list">
+                        <i class="fas fa-th-list module-icon"></i>
                         <div class="module-name">Camera list</div>
                         <div class="module-badge" id="total-cameras">...</div>
                     </div>
-                    <div class="module-item" data-module="access-cameras">
+                    <div class="module-item" data-module="access-cameras" onclick="window.location.href='/access_camera'" title="Access camera">
+                        <i class="fas fa-camera module-icon"></i>
                         <div class="module-name">Access camera</div>
                         <div class="module-badge" id="access-cameras-count">...</div>
                     </div>
-                    <div class="module-item" data-module="transport-cameras">
+                    <div class="module-item" data-module="transport-cameras" onclick="window.location.href='/transport_camera'" title="Transport camera">
+                        <i class="fas fa-video module-icon"></i>
                         <div class="module-name">Transport camera</div>
                         <div class="module-badge" id="transport-cameras-count">...</div>
                     </div>
@@ -182,21 +192,26 @@
             <div class="module-group">
                 <div class="module-group-title">BATTERIES</div>
                 <div class="module-group-content">
-                    <div class="module-item" data-module="battery" onclick="window.location.href='/battery'">
+                    <div class="module-item" data-module="battery" onclick="window.location.href='/battery'" title="Battery">
+                        <i class="fas fa-battery-three-quarters module-icon"></i>
                         <div class="module-name">Battery</div>
                         <div class="module-badge" id="battery-alerts-count">...</div>
                     </div>
-                    <div class="module-item" data-module="falla-ac" onclick="window.location.href='/falla_ac'">
+                    <div class="module-item" data-module="falla-ac" onclick="window.location.href='/falla_ac'" title="Electric failure">
+                        <i class="fas fa-bolt module-icon"></i>
                         <div class="module-name">Electric failure</div>
                         <div class="module-badge" id="ac-failures-count">...</div>
                     </div>
-                    <div class="module-item" data-module="region-la-libertad">
+                    <div class="module-item" data-module="region-la-libertad" title="Show battery">
+                        <i class="fas fa-eye module-icon"></i>
                         <div class="module-name">show battery</div>
                     </div>
-                    <div class="module-item" data-module="region-san-martin">
+                    <div class="module-item" data-module="region-san-martin" title="Issue battery">
+                        <i class="fas fa-exclamation-circle module-icon"></i>
                         <div class="module-name">issue battery</div>
                     </div>
-                    <div class="module-item" data-module="disconnection" onclick="window.location.href='/disconection'">
+                    <div class="module-item" data-module="disconnection" onclick="window.location.href='/disconection'" title="Battery disconnection">
+                        <i class="fas fa-unlink module-icon"></i>
                         <div class="module-name">Battery disconnection</div>
                         <div class="module-badge" id="disconnection-count">...</div>
                     </div>
@@ -207,7 +222,8 @@
             <div class="module-group">
                 <div class="module-group-title">HVAC</div>
                 <div class="module-group-content">
-                    <div class="module-item" data-module="hvac" onclick="window.location.href='/hvac'">
+                    <div class="module-item" data-module="hvac" onclick="window.location.href='/hvac'" title="Aire Acondicionado">
+                        <i class="fas fa-wind module-icon"></i>
                         <div class="module-name">Aire Acondicionado</div>
                         <div class="module-badge" id="hvac-alerts-count">...</div>
                     </div>
@@ -218,16 +234,20 @@
             <div class="module-group">
                 <div class="module-group-title">System</div>
                 <div class="module-group-content">
-                    <div class="module-item" data-module="system-status">
+                    <div class="module-item" data-module="system-status" title="System status">
+                        <i class="fas fa-server module-icon"></i>
                         <div class="module-name">System status</div>
                     </div>
-                    <div class="module-item" data-module="logs">
+                    <div class="module-item" data-module="logs" title="Logs and events">
+                        <i class="fas fa-list-alt module-icon"></i>
                         <div class="module-name">Logs and events</div>
                     </div>
-                    <div class="module-item" data-module="reports">
+                    <div class="module-item" data-module="reports" title="Reports">
+                        <i class="fas fa-chart-bar module-icon"></i>
                         <div class="module-name">Reports</div>
                     </div>
-                    <div class="module-item" data-module="settings" onclick="window.location.href='/settings'">
+                    <div class="module-item" data-module="settings" onclick="window.location.href='/settings'" title="Settings">
+                        <i class="fas fa-cog module-icon"></i>
                         <div class="module-name">Settings</div>
                     </div>
                 </div>
@@ -236,8 +256,9 @@
             <!-- Logout -->
             <div class="module-group" id="logout-item" style="display: none;">
                 <div class="module-group-content">
-                    <div class="module-item" onclick="logout()" style="color: var(--danger-color);">
-                        <div class="module-name"><i class="fas fa-sign-out-alt"></i> Logout</div>
+                    <div class="module-item" onclick="logout()" style="color: var(--danger-color);" title="Logout">
+                        <i class="fas fa-sign-out-alt module-icon" style="color: var(--danger-color);"></i>
+                        <div class="module-name">Logout</div>
                     </div>
                 </div>
             </div>

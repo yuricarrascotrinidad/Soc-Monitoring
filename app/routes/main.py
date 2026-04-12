@@ -39,6 +39,15 @@ def system_status():
 @main_bp.route('/hvac')
 def hvac_dashboard():
     return render_template('hvac.html')
+
 @main_bp.route('/disconection')
 def disconection_page():
     return render_template('disconection.html')
+
+@main_bp.route('/access_camera')
+def access_camera():
+    return render_template('access_camera.html')
+
+@main_bp.route('/transport_camera')
+def transport_camera():
+    return render_template('transport_camera.html')

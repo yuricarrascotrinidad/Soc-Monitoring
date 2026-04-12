@@ -41,8 +41,6 @@ def clasificar_evento_access(alarma):
     return "No clasificado"
 
 def clasificar_evento_transport(alarma):
-    AC_FAIL_PATTERNS = ["ingresa", "voltaje fase", "falla de red", "falla red", "mains failure", "mainsvoltage", "level one upper alarm", "low dc voltage"]
-
     CLASIFICACIONES = [
         (["cam p.prin", "cam. p.prin"], "Camara Prin"),
         (["cam patio", "cam. patio"], "Camara Patio"),
@@ -58,7 +56,8 @@ def clasificar_evento_transport(alarma):
         (["nvr", "servicios datos"], "NVR"),
         (["interruption alarm"], "Bateria Lit. disc."),
         (["soc"], "BATERIA BAJA"),
-        (AC_FAIL_PATTERNS, "AC_FAIL"),
+        (["ac ingresa voltaje fase xx ua"], "AC_FAIL"),
+        (["vmainsvoltagelxxn"], "AC_FAIL_GE"),
     ]
     
     texto = (alarma.get("alarm_name", "") + " " + 

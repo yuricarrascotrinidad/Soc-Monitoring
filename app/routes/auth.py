@@ -18,21 +18,50 @@ def login():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT password_hash, role, permissions FROM users WHERE username = %s", (username,))
+        cur.execute("SELECT password_hash, role, permissions, first_name, last_name FROM users WHERE username = %s", (username,))
         user = cur.fetchone()
         
         if user and check_password_hash(user[0], password):
             # Create token with additional claims
             role = user[1]
             permissions = user[2]
+            first_name = user[3]
+            last_name = user[4]
             
             access_token = create_access_token(
                 identity=username,
                 additional_claims={"role": role, "permissions": permissions}
             )
-            return jsonify(access_token=access_token, role=role, permissions=permissions)
+            return jsonify(
+                access_token=access_token, 
+                role=role, 
+                permissions=permissions,
+                first_name=first_name,
+                last_name=last_name
+            )
         
         return jsonify({"msg": "Bad username or password"}), 401
+    finally:
+        cur.close()
+        conn.close()
+
+@auth_bp.route('/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    username = get_jwt().get('sub') # Accessing identity from JWT
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT first_name, last_name, role FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
+        if user:
+            return jsonify({
+                "first_name": user[0],
+                "last_name": user[1],
+                "role": user[2],
+                "username": username
+            })
+        return jsonify({"msg": "User not found"}), 404
     finally:
         cur.close()
         conn.close()

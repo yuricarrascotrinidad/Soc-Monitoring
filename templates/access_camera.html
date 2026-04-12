@@ -1,183 +1,376 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cámara Transporte: {{ site_name }} - {{ position }}</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-            min-height: 100vh;
-        }
+{% block title %}Monitoreo Cámaras Access - SOC{% endblock %}
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
+{% block styles %}
+<style>
+    /* Estructura de Pantalla Dividida */
+    .camera-layout {
+        display: flex;
+        height: calc(100vh - 60px);
+        background: var(--body-bg);
+        margin: -20px;
+        overflow: hidden;
+    }
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #764ba2;
-        }
+    /* Sidebar - Árbol de Sitios */
+    .camera-sidebar {
+        width: 320px;
+        background: var(--card-bg);
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        transition: all 0.3s ease;
+    }
 
-        h1 {
-            color: #333;
-            margin: 0;
-        }
+    .sidebar-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--border-color);
+        margin-top: 12px;
+    }
 
-        .back-btn {
-            display: inline-block;
-            padding: 10px 20px;
-            background: #764ba2;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
+    .sidebar-search {
+        position: relative;
+    }
 
-        .back-btn:hover {
-            background: #5a67d8;
-        }
+    .sidebar-search input {
+        width: 100%;
+        padding: 10px 15px 10px 35px;
+        background: var(--body-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-color);
+        font-size: 0.9em;
+        outline: none;
+        transition: border-color 0.3s;
+        box-sizing: border-box;
+    }
 
-        .camera-info {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
-        }
+    .sidebar-search input:focus {
+        border-color: #3b82f6;
+    }
 
-        .position-badge {
-            background: #764ba2;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-weight: bold;
-            display: inline-block;
-            margin-left: 10px;
-        }
+    .sidebar-search i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+    }
 
-        .video-container {
-            text-align: center;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
+    .tree-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 0;
+    }
 
-        .video-container img {
-            max-width: 100%;
-            height: auto;
-        }
+    .tree-container::-webkit-scrollbar {
+        width: 6px;
+    }
 
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 20px;
-        }
+    .tree-container::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 3px;
+    }
 
-        .control-btn {
-            padding: 10px 20px;
-            background: #48bb78;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
+    /* Estilos del Árbol */
+    .tree-node {
+        padding: 8px 15px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-light);
+        font-size: 0.9em;
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
+    }
 
-        .control-btn:hover {
-            background: #38a169;
-        }
+    .tree-node:hover {
+        background: var(--border-color);
+        color: var(--text-color);
+    }
 
-        .status {
-            text-align: center;
-            padding: 10px;
-            background: #c6f6d5;
-            color: #22543d;
-            border-radius: 5px;
-            margin-top: 20px;
-        }
+    .tree-node.active {
+        background: #1e40af;
+        color: white;
+        border-left-color: #3b82f6;
+    }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-    </style>
-</head>
+    .tree-node i {
+        color: var(--text-muted);
+    }
 
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>
-                📹 Cámara Transporte: {{ site_name }}
-                <span class="position-badge">
-                    {% if position == 'principal' %}
-                    🏢 Principal
-                    {% elif position == 'patio' %}
-                    🅿️ Patio
-                    {% elif position == 'equipo' %}
-                    🔌 Equipo
-                    {% elif position == 'generador' %}
-                    ⚡ Generador
-                    {% else %}
-                    {{ position }}
-                    {% endif %}
-                </span>
-            </h1>
-            <a href="/transport_cameras/{{ site_name }}" class="back-btn">← Ver todas las cámaras</a>
+    .tree-node.active i {
+        color: #60a5fa;
+    }
+
+    /* Área Principal - Player */
+    .camera-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--body-bg);
+        position: relative;
+    }
+
+    .main-header {
+        padding: 12px 20px;
+        background: var(--header-bg);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .site-info h2 {
+        margin: 0;
+        color: var(--text-color);
+        font-size: 1.15em;
+        font-weight: 600;
+    }
+
+    .site-info p {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 0.85em;
+    }
+
+    .player-container {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        padding: 12px;
+    }
+
+    .video-wrapper {
+        width: 100%;
+        height: 100%;
+        max-width: 1400px;
+        background: #000;
+        border-radius: 12px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+        position: relative;
+    }
+
+    #camera-stream {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+
+    .placeholder-msg {
+        color: #475569;
+        text-align: center;
+    }
+
+    .placeholder-msg i {
+        font-size: 4em;
+        margin-bottom: 15px;
+        display: block;
+    }
+
+    /* Animación de carga */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid #334155;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="camera-layout">
+    <!-- Sidebar con Árbol de Sitios -->
+    <aside class="camera-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="site-search" placeholder="Buscar sitio...">
+            </div>
+        </div>
+        <div class="tree-container" id="camera-tree">
+            <div class="placeholder-msg" style="margin-top: 50px;">
+                <p>Cargando sitios...</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Área Principal de Video -->
+    <main class="camera-main">
+        <div class="main-header" id="video-header" style="visibility: hidden;">
+            <div class="site-info">
+                <h2 id="active-site-name">---</h2>
+                <p id="active-site-ip">IP: ---</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary btn-sm" onclick="reloadStream()">
+                    <i class="fas fa-sync-alt"></i> Recargar
+                </button>
+            </div>
         </div>
 
-        <div class="camera-info">
-            <h3>Información de la Cámara</h3>
-            <p><strong>Sitio:</strong> {{ site_name }}</p>
-            <p><strong>Posición:</strong> {{ position }}</p>
-            <p><strong>Dirección IP:</strong> {{ ip }}</p>
-            <p><strong>Estado:</strong> <span style="color: #48bb78;">● Conectado</span></p>
+        <div class="player-container">
+            <div class="video-wrapper">
+                <div class="loading-overlay" id="stream-loader">
+                    <div class="spinner"></div>
+                </div>
+                
+                <img id="camera-stream" src="" style="display: none;">
+                
+                <div class="placeholder-msg" id="stream-placeholder">
+                    <i class="fas fa-video-slash"></i>
+                    <p>Seleccione un sitio de la lista para ver la cámara</p>
+                </div>
+            </div>
         </div>
+    </main>
+</div>
+{% endblock %}
 
-        <div class="video-container">
-            <img src="/video_feed/transport/{{ site_name }}/{{ position }}"
-                alt="Video en vivo de {{ site_name }} - {{ position }}" width="900" height="500">
-        </div>
+{% block scripts %}
+<script>
+    let currentSite = null;
+    let allCameras = [];
 
-        <div class="controls">
-            <button class="control-btn" onclick="location.reload()">⟳ Actualizar</button>
-            <button class="control-btn"
-                onclick="window.open('/video_feed/transport/{{ site_name }}/{{ position }}', '_blank')">
-                📺 Abrir en nueva pestaña
-            </button>
-        </div>
-    </div>
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCameras();
+        
+        // Buscador en tiempo real
+        document.getElementById('site-search').addEventListener('input', (e) => {
+            filterTree(e.target.value);
+        });
+    });
 
-    <script>
-        // Auto-refresh si la imagen falla
-        document.querySelector('img').onerror = function () {
-            console.log('Error cargando video, intentando reconectar...');
-            setTimeout(function () {
-                location.reload();
-            }, 3000);
+    async function loadCameras() {
+        try {
+            const response = await fetch('/cameras');
+            const data = await response.json();
+            allCameras = data.access || [];
+            renderTree(allCameras);
+        } catch (error) {
+            console.error('Error loading cameras:', error);
+            document.getElementById('camera-tree').innerHTML = `
+                <div class="placeholder-msg" style="padding: 20px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error al cargar las cámaras</p>
+                </div>
+            `;
+        }
+    }
+
+    function renderTree(cameras) {
+        const container = document.getElementById('camera-tree');
+        container.innerHTML = '';
+
+        if (cameras.length === 0) {
+            container.innerHTML = '<div class="placeholder-msg"><p>No se encontraron cámaras</p></div>';
+            return;
+        }
+
+        // Ordenar alfabéticamente por sitio
+        cameras.sort((a, b) => a.site.localeCompare(b.site));
+
+        cameras.forEach(cam => {
+            const node = document.createElement('div');
+            node.className = 'tree-node';
+            node.dataset.site = cam.site;
+            node.dataset.ip = cam.ip;
+            node.innerHTML = `
+                <i class="fas fa-building"></i>
+                <span>${cam.site}</span>
+            `;
+            node.onclick = () => selectSite(cam, node);
+            container.appendChild(node);
+        });
+    }
+
+    function filterTree(query) {
+        const q = query.toLowerCase();
+        const nodes = document.querySelectorAll('.tree-node');
+        nodes.forEach(node => {
+            const site = node.dataset.site.toLowerCase();
+            if (site.includes(q)) {
+                node.style.display = 'flex';
+            } else {
+                node.style.display = 'none';
+            }
+        });
+    }
+
+    function selectSite(cam, element) {
+        // UI Updates
+        document.querySelectorAll('.tree-node').forEach(n => n.classList.remove('active'));
+        element.classList.add('active');
+        
+        document.getElementById('video-header').style.visibility = 'visible';
+        document.getElementById('active-site-name').textContent = cam.site;
+        document.getElementById('active-site-ip').textContent = `IP: ${cam.ip}`;
+        
+        // Stream Logic
+        const streamImg = document.getElementById('camera-stream');
+        const placeholder = document.getElementById('stream-placeholder');
+        const loader = document.getElementById('stream-loader');
+        
+        placeholder.style.display = 'none';
+        streamImg.style.display = 'none';
+        loader.style.display = 'flex';
+        
+        currentSite = cam;
+        
+        // Usar un nuevo objeto image para evitar flickering excesivo
+        const newSrc = `/video_feed/${cam.site}`;
+        
+        streamImg.onload = () => {
+            loader.style.display = 'none';
+            streamImg.style.display = 'block';
         };
+        
+        streamImg.onerror = () => {
+            loader.style.display = 'none';
+            placeholder.style.display = 'block';
+            placeholder.innerHTML = `
+                <i class="fas fa-unlink"></i>
+                <p>No se pudo conectar con la cámara de ${cam.site}</p>
+            `;
+        };
+        
+        streamImg.src = newSrc;
+    }
 
-        // Actualizar cada 5 minutos para mantener la conexión
-        setInterval(function () {
-            console.log('Manteniendo conexión de video...');
-            document.querySelector('img').src = document.querySelector('img').src;
-        }, 300000);
-    </script>
-</body>
-
-</html>
+    function reloadStream() {
+        if (currentSite) {
+            const nodes = document.querySelectorAll('.tree-node');
+            const activeNode = Array.from(nodes).find(n => n.dataset.site === currentSite.site);
+            if (activeNode) selectSite(currentSite, activeNode);
+        }
+    }
+</script>
+{% endblock %}

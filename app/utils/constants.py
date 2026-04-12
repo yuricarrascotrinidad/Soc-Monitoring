@@ -92,7 +92,7 @@ if not CONFIG_REGIONES:
 DATA_TEMPLATE = {
     "filter_id": "", "station_name": "", "precinct_list": "", "alarm_name": "", "device_id": "",
     "alarm_time": "", "alarm_span_time": "", "device_name": "", "mete_name": "",
-    "alarmtype_list": "18_18003001,18_18042001,18_18043001,19_19082001,18_18047001,"
+    "alarmtype_list": "18_18003001,18_18042001,18_18043001,19_19082001,18_18047001,5_05159001,"
                       "18_18046001,47_47099001,96_96006001,38_38099001,47_47116001,32_32099001",
     "start_time": "", "end_time": "",
     "eliminate_state": "0", "radio_clear": "0",
@@ -152,6 +152,10 @@ SENSORES_INTERES = {
     "0106184001": "current1",   
     "0106184002": "current2",   
     "0106099001": "conexion",
+
+    # Generador (Type 5)
+    "0105159001": "voltaje_gen",
+    "0105158001": "corriente_gen",
 }
 
 HEADERS = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}

@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('jwt_token', data.access_token);
                 localStorage.setItem('user_role', data.role);
                 localStorage.setItem('user_permissions', JSON.stringify(data.permissions));
+                localStorage.setItem('user_first_name', data.first_name || '');
+                localStorage.setItem('user_last_name', data.last_name || '');
                 
                 // Redirigir al dashboard
                 window.location.href = '/dashboard';

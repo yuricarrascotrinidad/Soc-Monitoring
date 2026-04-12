@@ -183,7 +183,11 @@ const DashboardManager = {
             if (moduleDetails) moduleDetails.innerHTML = moduleContents[moduleId].content;
 
             if (moduleId === 'camera-list') {
-                setTimeout(() => window.location.href = '/camera_list', 500);
+                setTimeout(() => window.location.href = '/camera_list', 100);
+            } else if (moduleId === 'access-cameras') {
+                setTimeout(() => window.location.href = '/access_camera', 100);
+            } else if (moduleId === 'transport-cameras') {
+                setTimeout(() => window.location.href = '/transport_camera', 100);
             } else if (moduleId === 'system-status') {
                 setTimeout(() => window.open('/estado', '_blank'), 500);
             }
@@ -268,6 +272,7 @@ const DashboardManager = {
 
             // Batería count (ya viene en el state)
             this.updateElementText('battery-alerts-count', data.battery_alerts_count);
+            this.updateElementText('disconnection-count', data.disconnection_count || 0);
             this.updateElementText('hvac-alerts-count', data.hvac_total_count || 0);
 
             const batteryBadge = document.getElementById('battery-alerts-count');
@@ -717,6 +722,23 @@ const DashboardManager = {
                 item.classList.add('active');
             }
         });
+
+        // ---- Sidebar Collapse Toggle ----
+        const sidebar = document.getElementById('mainSidebar');
+        const toggleBtn = document.getElementById('sidebarToggle');
+
+        if (sidebar && toggleBtn) {
+            // Restore saved state
+            if (localStorage.getItem('sidebar-collapsed') === 'true') {
+                sidebar.classList.add('collapsed');
+            }
+
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isCollapsed = sidebar.classList.toggle('collapsed');
+                localStorage.setItem('sidebar-collapsed', isCollapsed);
+            });
+        }
     },
 };
 

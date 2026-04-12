@@ -196,7 +196,7 @@ class MonitoringService:
         hdrs["Host"] = f"{ip}:8090"
         hdrs["Origin"] = f"http://{ip}:8090"
         hdrs["Referer"] = f"http://{ip}:8090/peim/main/realtime/realtimedevice.html"
-        valores = {'soc': None, 'carga': None, 'descarga': None, 'voltaje': None, 'svoltage': None, 'current1': None, 'current2': None, 'conexion': None}
+        valores = {'soc': None, 'carga': None, 'descarga': None, 'voltaje': None, 'svoltage': None, 'current1': None, 'current2': None, 'conexion': None, 'voltaje_gen': None, 'corriente_gen': None}
         for i in range(1, 5): valores[f'soc_{i}'], valores[f'cur_{i}'] = None, None
         payload = f"device_id={device_id}&is_manual=0"
         try:
@@ -206,14 +206,20 @@ class MonitoringService:
                 sensores = resp.json()
             for s in sensores:
                 mid, mval = s.get("meteId", ""), s.get("meteValue")
-                if mid in SENSORES_INTERES:
-                    field = SENSORES_INTERES[mid]
+                mid = str(mid).strip()
+                
+                from app.utils.constants import SENSORES_INTERES
+                field = SENSORES_INTERES.get(mid)
+
+                if field:
                     try:
                         val = float(mval) if mval else None
                         if val is not None and field == "conexion":
                             val = int(val)
-                        if field in valores and valores[field] is None: valores[field] = val
+                        if field in valores and valores[field] is None:
+                            valores[field] = val
                     except: pass
+            
             return valores
         except Exception as e:
             logging.error(f"Error telemetria {device_id}: {e}")
@@ -221,8 +227,8 @@ class MonitoringService:
 
     @staticmethod
     def _extraer_bateria_de_item(item):
-        """Extrae info de batería de un nodo del árbol de dispositivos."""
-        dtype = item.get("device_type")
+        """Extrae info de batería o rectificador de un nodo del árbol de dispositivos."""
+        dtype = str(item.get("device_type"))
         if dtype == "47":  # Litio
             extend_props = {}
             try:
@@ -232,6 +238,10 @@ class MonitoringService:
             return {"device_id": item.get("device_id"), "device_name": item.get("device_name", "Batería de Litio"), "type": "litio", "extend_props": extend_props}
         elif dtype == "32":  # ZTE
             return {"device_id": item.get("device_id"), "device_name": item.get("device_name", "Batería ZTE"), "type": "zte", "extend_props": {}}
+        elif dtype in ["6", "8"]:  # Rectificadores
+            return {"device_id": item.get("device_id"), "device_name": item.get("device_name", "Rectificador"), "type": "rectificador", "extend_props": {}}
+        elif dtype == "5":  # Generador
+            return {"device_id": item.get("device_id"), "device_name": item.get("device_name", "Grupo Electrógeno"), "type": "generador", "extend_props": {}}
         return None
 
     @staticmethod
@@ -251,11 +261,12 @@ class MonitoringService:
                 data = resp.json()
                 if not data.get("success"): return []
                 for item in data.get("info", []):
-                    dtype = item.get("device_type")
+                    dtype = str(item.get("device_type"))
                     bat = MonitoringService._extraer_bateria_de_item(item)
                     if bat:
                         baterias.append(bat)
-                    elif dtype == "38" and "SNMP" in str(item.get("device_name", "")):
+                    
+                    if dtype == "38" and "SNMP" in str(item.get("device_name", "")):
                         # ZTE: buscar type=32 dentro del SNMP
                         pz = {**base_params, "id": item["device_id"]}
                         with session.get(url, headers=hdrs, cookies=cookies, params=pz, timeout=20) as rz:
@@ -277,6 +288,10 @@ class MonitoringService:
                                             b = MonitoringService._extraer_bateria_de_item(if_)
                                             if b: baterias.append(b)
                         except Exception: pass  # Timeout en FSU no aborta búsqueda
+                    elif dtype == "5":
+                        # Generador directo
+                        bat = MonitoringService._extraer_bateria_de_item(item)
+                        if bat: baterias.append(bat)
         except Exception as e:
             logging.error(f"Error buscando baterias {precinct_id}: {e}")
         return baterias
@@ -290,9 +305,15 @@ class MonitoringService:
             cf = clasificar_evento_access if db_type == "access" else clasificar_evento_transport
             CSL = {'AC_FAIL', 'BATERIA BAJA', 'BATERIA', 'Bateria Lit. disc.'}
             AHORA = datetime.now()
+            CATEGORIAS_REINICIO = {'AC_FAIL', 'BATERIA BAJA', 'Bateria Lit. disc.'}
             with conn:
                 cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                # Seleccionar solo alarmas pertenecientes al 'source' actual (ac o general)
+                
+                # Identificar sitios que ya tienen alarmas de descarga activas (globalmente)
+                cur.execute("SELECT DISTINCT sitio FROM alarmas_activas WHERE categoria IN %s", (tuple(CATEGORIAS_REINICIO),))
+                sitios_con_descarga_registrada = {r['sitio'] for r in cur.fetchall()}
+
+                # Seleccionar solo alarmas pertenecientes al 'source' actual para sincronización local
                 cur.execute("SELECT * FROM alarmas_activas WHERE tipo=%s AND region=%s AND source=%s", (db_type, region, source))
                 rows = cur.fetchall()
                 activas = {}
@@ -304,6 +325,8 @@ class MonitoringService:
                     activas[(a['sitio'], a['alarma'], h_str, did)] = a
                 
                 batch_nuevas, para_en_limbo = [], set()
+                sitios_a_reiniciar = set()
+                
                 for a in alarmas:
                     s, alm, h = a["station_name"], a["alarm_name"], a["alarm_time"]
                     did_new = str(a.get("device_id", "")).strip().zfill(16)
@@ -311,10 +334,20 @@ class MonitoringService:
                     if is_ac: cat = 'AC_FAIL'
                     else: cat = cf(a)
                     
+                    # Lógica de reinicio: Si entra una categoría de descarga y el sitio no tenía una previa
+                    if cat in CATEGORIAS_REINICIO and s not in sitios_con_descarga_registrada:
+                        sitios_a_reiniciar.add(s)
+
                     key = (s, alm, h, did_new)
                     para_en_limbo.add(key)
                     dur = convertir_duracion(a.get("alarm_span_time", ""))
                     batch_nuevas.append((db_type, region, h, dur, s, alm, a.get("device_name", ""), a.get("precinct_id", ""), a.get("mete_name", ""), cat, 'on', did_new, a.get("valor"), None, source))
+
+                # Ejecutar borrado de telemetría para los nuevos ingresos a estado de descarga
+                if sitios_a_reiniciar:
+                    for s in sitios_a_reiniciar:
+                        # logging.info(f"⚡ Nueva alarma crítica detectada para {s}. Reiniciando telemetría de baterías.")
+                        cur.execute("DELETE FROM battery_telemetry WHERE sitio = %s", (s,))
 
                 fh_hist, fh_limbo = [], []
                 for key, data in activas.items():
@@ -354,6 +387,9 @@ class MonitoringService:
             key = (row[0], row[5], row[6])  # device_id, sitio, nombre
             seen[key] = row
         batch_data = list(seen.values())
+        for row in batch_data:
+            if "Rectificad" in str(row[6]) or row[8] is not None:
+                logging.debug(f"[DEBUG_TEL] ID: {row[0]} | Name: {row[6]} | Svolt: {row[8]}")
         conn = get_db_connection()
         try:
             with conn:
@@ -374,6 +410,7 @@ class MonitoringService:
                         conexion = EXCLUDED.conexion,
                         ultimo_update = EXCLUDED.ultimo_update
                 """, batch_data)
+                
         except Exception as e: logging.error(f"Error UPSERT batch: {e}")
         finally: conn.close()
 
@@ -382,7 +419,7 @@ class MonitoringService:
         MonitoringService.actualizar_telemetria_bateria_batch([(device_id, valores, sitio, nombre)])
 
     @staticmethod
-    def _procesar_telemetria_dispositivo(device_id, valores, sitio, nombre, device_type=None):
+    def _procesar_telemetria_dispositivo(device_id, valores, sitio, nombre, device_type=None, categoria=None):
         """Procesa la telemetría según el tipo de dispositivo (basado en el nuevo script del usuario)."""
         now = datetime.now()
         
@@ -397,19 +434,37 @@ class MonitoringService:
                 device_id, valores.get("soc"), valores.get("carga"), valores.get("descarga"),
                 now, sitio, nombre, None, None, None, None, valores.get("conexion")
             )]
-        elif device_type == 32:  # ZTE (Colapsar bancos)
-            soc, cur1 = None, None
+        elif device_type == 32:  # ZTE (No colapsar, guardar bancos independientes)
+            rows = []
+            conexion = valores.get("conexion")
             for i in range(1, 5):
-                if valores.get(f'soc_{i}') is not None: soc = valores.get(f'soc_{i}')
-                if valores.get(f'cur_{i}') is not None: cur1 = valores.get(f'cur_{i}')
+                soc_val = valores.get(f'soc_{i}')
+                cur_val = valores.get(f'cur_{i}')
+                # Si existe SOC o Corriente para el banco i, crear registro independiente
+                if soc_val is not None or cur_val is not None:
+                    rows.append((
+                        device_id, soc_val, None, None, now, sitio, f"Bateria ZTE {i}",
+                        None, None, cur_val, None, conexion
+                    ))
+            
+            # Si no se encontraron bancos pero hay señal de conexión, mantener un registro base
+            if not rows and conexion is not None:
+                rows.append((
+                    device_id, None, None, None, now, sitio, nombre,
+                    None, None, None, None, conexion
+                ))
+            return rows
+        else:  # Rectificador (8 o 6) o Generador
+            v_final = valores.get("voltaje")
+            c_gen = None
+            # Si es Grupo Electrógeno (Type 5) o por nombre o categoría de alarma AC_FAIL_GE
+            if str(device_type) == "5" or (nombre and 'Grupo Electrógeno' in nombre) or categoria == 'AC_FAIL_GE':
+                v_final = valores.get("voltaje_gen")
+                c_gen = valores.get("corriente_gen")
+            
             return [(
-                device_id, soc, None, None, now, sitio, nombre,
-                None, None, cur1, None, valores.get("conexion")
-            )]
-        else:  # Rectificador (8 o 6)
-            return [(
-                device_id, None, None, None, now, sitio, nombre,
-                valores.get("voltaje"), valores.get("svoltaje"), valores.get("current1"), valores.get("current2"), valores.get("conexion")
+                device_id, None, c_gen, None, now, sitio, nombre,
+                v_final, valores.get("svoltage"), valores.get("current1"), valores.get("current2"), valores.get("conexion")
             )]
 
     @staticmethod
@@ -576,7 +631,16 @@ class MonitoringService:
             did = str(bat["device_id"]).strip().zfill(16)
             vals = MonitoringService.obtener_valores_dispositivo(ip, did, cookies)
             if vals:
-                dtype = 47 if bat.get("type") == "litio" else 32
+                # Determinar dtype para el procesamiento
+                if bat.get("type") == "litio": 
+                    dtype = 47
+                elif bat.get("type") == "zte": 
+                    dtype = 32
+                elif bat.get("type") == "generador":
+                    dtype = 5
+                else: 
+                    dtype = 8  # Rectificadores (6 o 8)
+                
                 batch.extend(MonitoringService._procesar_telemetria_dispositivo(did, vals, sitio, bat["device_name"], dtype))
         return batch
 
@@ -593,18 +657,18 @@ class MonitoringService:
                     cur.execute("""
                         SELECT DISTINCT ON (sitio, tipo, region) sitio, region, precinct_id, device_id, devicename as nombre, tipo as tipo_sistema
                         FROM alarmas_activas
-                        WHERE estado = 'on' AND categoria = 'AC_FAIL'
+                        WHERE estado = 'on' AND categoria IN ('AC_FAIL', 'AC_FAIL_GE')
                         ORDER BY sitio, tipo, region, hora DESC
                     """)
                     ac_sites = cur.fetchall()
 
-                    # Para otras categorías y Rectificadores (AC_FAIL): usar device_id directamente
+                    # Para otras categorías y Rectificadores (AC_FAIL/GE): usar device_id directamente
                     cur.execute("""
-                        SELECT DISTINCT sitio, region, device_id, devicename as nombre, tipo as tipo_sistema
+                        SELECT DISTINCT sitio, region, device_id, devicename as nombre, tipo as tipo_sistema, categoria
                         FROM alarmas_activas
                         WHERE estado = 'on'
                         AND (
-                            categoria IN ('Bateria Lit. disc.', 'BATERIA BAJA', 'AC_FAIL')
+                            categoria IN ('Bateria Lit. disc.', 'BATERIA BAJA', 'AC_FAIL', 'AC_FAIL_GE')
                             OR (devicename LIKE '%%ZTE%%' OR alarma LIKE '%%ZTE%%')
                         )
                     """)
@@ -641,12 +705,12 @@ class MonitoringService:
                                     ip = urlparse(cfg["url"]).hostname
                                     cookies_tel = MonitoringService._enriquecer_cookies(cfg["cookies"])
                                     f = ex.submit(MonitoringService.obtener_valores_dispositivo, ip, did, cookies_tel)
-                                    fs[f] = (did, d['sitio'], d['nombre'], d.get('device_type'))
+                                    fs[f] = (did, d['sitio'], d['nombre'], d.get('device_type'), d['categoria'])
                             for f in as_completed(fs):
-                                did, sit, nom, dtype = fs[f]
+                                did, sit, nom, dtype, cat = fs[f]
                                 try:
                                     r = f.result(timeout=30)
-                                    if r: batch.extend(MonitoringService._procesar_telemetria_dispositivo(did, r, sit, nom, dtype))
+                                    if r: batch.extend(MonitoringService._procesar_telemetria_dispositivo(did, r, sit, nom, dtype, cat))
                                 except: pass
                         if i + 100 < len(other_devs): time.sleep(0.5)
                     if batch:
@@ -817,9 +881,10 @@ class MonitoringService:
             cur.execute("SELECT site, position, ip FROM transport_cameras"); tcam = [{"site": r[0], "position": r[1], "ip": r[2]} for r in cur.fetchall()]
             cur.execute("SELECT COUNT(DISTINCT sitio) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'AC_FAIL'"); ac_c = cur.fetchone()[0]
             cur.execute("SELECT COUNT(DISTINCT device_id) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'BATERIA BAJA'"); bat_c = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'Bateria Lit. disc.'"); disc_c = cur.fetchone()[0]
             h_data = HvacService.get_current_data(); h_c = sum(len(r.get("aires", [])) for r in h_data)
         finally: conn.close()
-        return {'access': acc, 'transport': tra, 'ac_failures_count': ac_c, 'battery_alerts_count': bat_c, 'hvac_total_count': h_c, 
+        return {'access': acc, 'transport': tra, 'ac_failures_count': ac_c, 'battery_alerts_count': bat_c, 'disconnection_count': disc_c, 'hvac_total_count': h_c, 
                 'cameras': {'access': acam, 'transport': tcam}, 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
                 'connection_errors': MonitoringService._connection_errors}
     

@@ -3,58 +3,27 @@
 {% block title %}Baterías Desconectadas{% endblock %}
 
 {% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/battery.css') }}">
 <style>
     .disconnection-container {
         padding: 20px;
     }
 
-    .filters-bar {
-        background: var(--card-bg);
-        padding: 15px 20px;
-        border-radius: 12px;
-        margin-bottom: 20px;
-        display: flex;
-        gap: 15px;
-        flex-wrap: wrap;
-        align-items: flex-end;
-    }
-
-    .filter-group {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-    }
-
-    .filter-group label {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .filter-group select {
-        padding: 8px 12px;
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-        background: var(--input-bg);
-        color: var(--text-primary);
-        font-size: 14px;
-        min-width: 150px;
-    }
-
+    /* Override or add specific styles for disconnection page if needed */
     .btn-export {
-        background: var(--success-color);
+        background: var(--normal-green);
         color: white;
         border: none;
-        padding: 8px 20px;
-        border-radius: 8px;
+        padding: 8px 16px;
+        border-radius: 20px;
         cursor: pointer;
         font-weight: 600;
         display: flex;
         align-items: center;
         gap: 8px;
         transition: all 0.3s ease;
+        font-size: 0.85rem;
+        margin-left: 10px;
     }
 
     .btn-export:hover {
@@ -62,161 +31,121 @@
         transform: translateY(-1px);
     }
 
-    .table-wrapper {
-        overflow-x: auto;
-        border-radius: 12px;
+    .stat-card-disconnection {
         background: var(--card-bg);
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    th,
-    td {
-        padding: 12px 15px;
-        text-align: left;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    th {
-        background: var(--header-bg);
-        font-weight: 600;
-        color: var(--text-secondary);
-        font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    td {
-        font-size: 14px;
-        color: var(--text-primary);
-    }
-
-    tr:hover {
-        background: var(--hover-bg);
-    }
-
-    .no-data {
-        text-align: center;
-        padding: 40px;
-        color: var(--text-secondary);
-    }
-
-    .loading {
-        text-align: center;
-        padding: 40px;
-    }
-
-    .loading i {
-        font-size: 32px;
-        color: var(--primary-color);
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-
-    .stats {
-        display: flex;
-        gap: 20px;
-        margin-bottom: 20px;
-    }
-
-    .stat-card {
-        background: var(--card-bg);
-        padding: 15px 20px;
+        padding: 20px 25px;
         border-radius: 12px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 15px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        margin-bottom: 25px;
+        width: fit-content;
+        min-width: 250px;
     }
 
-    .stat-card i {
+    .stat-card-disconnection i {
+        font-size: 32px;
+        color: var(--critical-red);
+    }
+
+    .stat-card-disconnection .stat-info h3 {
         font-size: 28px;
-        color: var(--danger-color);
+        font-weight: 800;
+        margin: 0;
+        color: var(--text-dark);
     }
 
-    .stat-info h3 {
+    .stat-card-disconnection .stat-info p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .loading-row {
+        text-align: center;
+        padding: 40px !important;
+        color: var(--text-muted);
+    }
+
+    .loading-row i {
         font-size: 24px;
-        font-weight: 700;
-        margin: 0;
-    }
-
-    .stat-info p {
-        margin: 0;
-        font-size: 12px;
-        color: var(--text-secondary);
+        margin-bottom: 10px;
+        display: block;
+        color: var(--primary-blue);
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="disconnection-container">
-    <h1><i class="fas fa-battery-quarter"></i> Baterías Desconectadas</h1>
-    <p>Alarmas de baterías de litio con desconexión detectada</p>
-
-    <div class="stats">
-        <div class="stat-card">
-            <i class="fas fa-battery-empty"></i>
-            <div class="stat-info">
-                <h3 id="total-count">0</h3>
-                <p>Baterías desconectadas</p>
-            </div>
+    <div class="header-section">
+        <div class="header-title">
+            <h1><i class="fas fa-battery-quarter"></i> Baterías Desconectadas</h1>
+            <p id="update-timestamp">Última actualización: --/--/-- --:--:--</p>
         </div>
-    </div>
-
-    <div class="filters-bar">
-        <div class="filter-group">
-            <label><i class="fas fa-map-marker-alt"></i> Región</label>
-            <select id="filter-region">
-                <option value="">Todas</option>
-                <option value="Ancash">Ancash</option>
-                <option value="La Libertad">La Libertad</option>
-                <option value="San Martin">San Martin</option>
-                <option value="Lima">Lima</option>
-            </select>
-        </div>
-
-        <div class="filter-group">
-            <label><i class="fas fa-server"></i> Tipo</label>
-            <select id="filter-type">
-                <option value="">Todos</option>
-                <option value="access">Access</option>
-                <option value="transport">Transport</option>
-            </select>
-        </div>
-
-        <button class="btn-export" id="btn-export">
-            <i class="fas fa-download"></i> Exportar Excel
+        <button onclick="loadData()" class="refresh-button">
+            <i class="fa-solid fa-rotate"></i> Actualizar
         </button>
     </div>
 
-    <div class="table-wrapper">
-        <table id="disconnection-table">
+    <div class="stat-card-disconnection">
+        <i class="fas fa-link-slash"></i>
+        <div class="stat-info">
+            <h3 id="total-count">0</h3>
+            <p>Baterías actualmente desconectadas</p>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <div class="filter-group">
+            <span class="filter-label"><i class="fa-solid fa-filter"></i> Tipo:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="tipo" data-value="todos">Todos</button>
+                <button class="filter-btn" data-filter="tipo" data-value="access">Access</button>
+                <button class="filter-btn" data-filter="tipo" data-value="transport">Transport</button>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <span class="filter-label"><i class="fa-solid fa-location-dot"></i> Región:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="region" data-value="todas">Todas</button>
+                <button class="filter-btn" data-filter="region" data-value="Ancash">Ancash</button>
+                <button class="filter-btn" data-filter="region" data-value="Arequipa">Arequipa</button>
+                <button class="filter-btn" data-filter="region" data-value="La Libertad">La Libertad</button>
+                <button class="filter-btn" data-filter="region" data-value="San Martin">San Martin</button>
+                <button class="filter-btn" data-filter="region" data-value="Lima">Lima</button>
+            </div>
+        </div>
+
+        <button class="btn-export" id="btn-export" onclick="exportExcel()">
+            <i class="fas fa-file-excel"></i> Exportar
+        </button>
+
+        <a href="javascript:void(0)" class="clear-filters" onclick="resetFilters()">
+            <i class="fa-solid fa-circle-xmark"></i> Limpiar filtros
+        </a>
+    </div>
+
+    <div class="table-container">
+        <table class="data-table">
             <thead>
                 <tr>
+                    <th>Fecha/Hora</th>
                     <th>Tipo</th>
                     <th>Región</th>
-                    <th>Fecha/Hora</th>
-                    <th>Duración</th>
                     <th>Sitio</th>
-                    <th>Alarma</th>
                     <th>Dispositivo</th>
+                    <th>Alarma</th>
+                    <th>Duración</th>
                 </tr>
             </thead>
             <tbody id="table-body">
-                <tr class="loading">
-                    <td colspan="7">
-                        <i class="fas fa-spinner"></i> Cargando datos...
+                <tr>
+                    <td colspan="7" class="loading-row">
+                        <i class="fas fa-spinner fa-spin"></i> Cargando datos...
                     </td>
                 </tr>
             </tbody>
@@ -227,21 +156,19 @@
 
 {% block scripts %}
 <script>
-    let currentData = [];
+    let allRecords = [];
+    let currentFilters = {
+        tipo: 'todos',
+        regions: [] // Vacío significa "Todas"
+    };
 
     async function loadData() {
-        const region = document.getElementById('filter-region').value;
-        const tipo = document.getElementById('filter-type').value;
         const token = localStorage.getItem('jwt_token');
-
-        let url = '/api/disconnection_data';
-        const params = new URLSearchParams();
-        if (region) params.append('region', region);
-        if (tipo) params.append('tipo', tipo);
-        if (params.toString()) url += '?' + params.toString();
+        const timestamp = document.getElementById('update-timestamp');
+        const countEl = document.getElementById('total-count');
 
         try {
-            const response = await fetch(url, {
+            const response = await fetch('/api/disconnection_data', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -250,49 +177,72 @@
             const data = await response.json();
 
             if (response.ok) {
-                currentData = data.records;
-                renderTable(currentData);
-                document.getElementById('total-count').textContent = data.count;
+                allRecords = data.records;
+                renderTable();
+                if (countEl) countEl.textContent = data.count;
+                if (timestamp) timestamp.textContent = `Última actualización: ${new Date().toLocaleString()}`;
             } else {
                 throw new Error(data.error || 'Error al cargar datos');
             }
         } catch (error) {
             console.error('Error:', error);
-            document.getElementById('table-body').innerHTML = `
-                <tr class="no-data">
-                    <td colspan="7">
-                        <i class="fas fa-exclamation-triangle"></i> Error al cargar datos
-                    </td>
-                </tr>
-            `;
+            const body = document.getElementById('table-body');
+            if (body) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center" style="color: var(--critical-red); padding: 40px;">
+                            <i class="fas fa-exclamation-triangle"></i> Error al conectar con el servidor
+                        </td>
+                    </tr>
+                `;
+            }
         }
     }
 
-    function renderTable(records) {
+    function renderTable() {
         const tbody = document.getElementById('table-body');
+        if (!tbody) return;
 
-        if (!records || records.length === 0) {
+        const filtered = allRecords.filter(r => {
+            const matchTipo = currentFilters.tipo === 'todos' || r.tipo.toLowerCase() === currentFilters.tipo;
+            const matchRegion = currentFilters.regions.length === 0 || currentFilters.regions.includes(r.region);
+            return matchTipo && matchRegion;
+        });
+
+        if (filtered.length === 0) {
             tbody.innerHTML = `
-                <tr class="no-data">
-                    <td colspan="7">
-                        <i class="fas fa-info-circle"></i> No hay baterías desconectadas
+                <tr>
+                    <td colspan="7" class="text-center" style="padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-info-circle"></i> No se encontraron registros con los filtros seleccionados
                     </td>
                 </tr>
             `;
             return;
         }
 
-        tbody.innerHTML = records.map(record => `
+        tbody.innerHTML = filtered.map(r => `
             <tr>
-                <td>${escapeHtml(record.tipo)}</td>
-                <td>${escapeHtml(record.region)}</td>
-                <td>${escapeHtml(record.hora)}</td>
-                <td><strong>${escapeHtml(record.duracion)}</strong></td>
-                <td>${escapeHtml(record.sitio)}</td>
-                <td>${escapeHtml(record.alarma)}</td>
-                <td>${escapeHtml(record.devicename)}</td>
+                <td>${escapeHtml(r.hora)}</td>
+                <td><span class="region-tag" style="background: ${r.tipo.toLowerCase() === 'access' ? '#003366' : '#2563eb'}">${escapeHtml(r.tipo)}</span></td>
+                <td>${escapeHtml(r.region)}</td>
+                <td style="font-weight: 700;">${escapeHtml(r.sitio)}</td>
+                <td>${escapeHtml(r.devicename || 'Batería')}</td>
+                <td style="color: var(--critical-red); font-weight: 600;">${escapeHtml(r.alarma)}</td>
+                <td style="font-family: monospace; font-weight: 700;">${escapeHtml(r.duracion)}</td>
             </tr>
         `).join('');
+    }
+
+    function resetFilters() {
+        currentFilters.tipo = 'todos';
+        currentFilters.regions = [];
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            if (btn.dataset.value === 'todos' || btn.dataset.value === 'todas') btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+
+        renderTable();
     }
 
     function escapeHtml(text) {
@@ -303,10 +253,14 @@
     }
 
     async function exportExcel() {
-        const region = document.getElementById('filter-region').value;
-        const tipo = document.getElementById('filter-type').value;
         const token = localStorage.getItem('jwt_token');
-
+        // Usar los filtros actuales para la exportación si se desea, 
+        // pero el endpoint actual soporta filtros en query params.
+        // Adaptaremos para exportar lo que está filtrado actualmente.
+        
+        const region = currentFilters.regions.length === 1 ? currentFilters.regions[0] : '';
+        const tipo = currentFilters.tipo !== 'todos' ? currentFilters.tipo : '';
+        
         let url = '/exportar/disconnection';
         const params = new URLSearchParams();
         if (region) params.append('region', region);
@@ -317,71 +271,80 @@
         const originalHTML = exportBtn.innerHTML;
 
         try {
-            // Mostrar estado de carga
-            exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+            exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ...';
             exportBtn.disabled = true;
 
             const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Sesión expirada. Por favor, inicie sesión nuevamente.');
-                } else if (response.status === 403) {
-                    throw new Error('No tiene permiso para exportar datos.');
-                }
-                throw new Error(`Error ${response.status}`);
-            }
-
+            if (!response.ok) throw new Error(`Error ${response.status}`);
             const blob = await response.blob();
+            if (blob.size === 0) throw new Error('Archivo vacío');
 
-            if (blob.size === 0) {
-                throw new Error('El archivo generado está vacío.');
-            }
-
-            // Crear y descargar el archivo
             const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = downloadUrl;
-
-            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-            a.download = `baterias_desconectadas_${timestamp}.xlsx`;
-
+            a.download = `baterias_desconectadas_${new Date().toISOString().slice(0,10)}.xlsx`;
             document.body.appendChild(a);
             a.click();
-
-            // Limpiar
             setTimeout(() => {
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(downloadUrl);
             }, 100);
 
         } catch (error) {
-            console.error('Error exportando:', error);
-            alert(error.message || 'Error al generar el archivo Excel');
+            alert('Error al exportar: ' + error.message);
         } finally {
-            // Restaurar botón
             exportBtn.innerHTML = originalHTML;
             exportBtn.disabled = false;
         }
     }
 
-    // Event listeners
-    document.getElementById('filter-region').addEventListener('change', loadData);
-    document.getElementById('filter-type').addEventListener('change', loadData);
-    document.getElementById('btn-export').addEventListener('click', exportExcel);
+    // Filter Button Listeners
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('filter-btn')) {
+            const btn = e.target;
+            const group = btn.dataset.filter;
+            const value = btn.dataset.value;
 
-    // Cargar datos al iniciar
-    // Actualizar cada 30 segundos
-    let refreshInterval = setInterval(() => {
+            if (group === 'tipo') {
+                document.querySelectorAll(`.filter-btn[data-filter="tipo"]`).forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilters.tipo = value;
+            } else if (group === 'region') {
+                if (value === 'todas') {
+                    currentFilters.regions = [];
+                    document.querySelectorAll(`.filter-btn[data-filter="region"]`).forEach(b => {
+                        if (b.dataset.value === 'todas') b.classList.add('active');
+                        else b.classList.remove('active');
+                    });
+                } else {
+                    const allBtn = document.querySelector(`.filter-btn[data-filter="region"][data-value="todas"]`);
+                    if (allBtn) allBtn.classList.remove('active');
+
+                    if (currentFilters.regions.includes(value)) {
+                        currentFilters.regions = currentFilters.regions.filter(v => v !== value);
+                        btn.classList.remove('active');
+                    } else {
+                        currentFilters.regions.push(value);
+                        btn.classList.add('active');
+                    }
+
+                    if (currentFilters.regions.length === 0 && allBtn) {
+                        allBtn.classList.add('active');
+                    }
+                }
+            }
+            renderTable();
+        }
+    });
+
+    // Iniciar carga inmediata
+    document.addEventListener('DOMContentLoaded', () => {
         loadData();
-    }, 3000);
-    // Limpiar intervalo al salir de la página
-    window.addEventListener('beforeunload', () => {
-        if (refreshInterval) clearInterval(refreshInterval);
+        // Recargar cada 30 segundos (más razonable que 3s)
+        setInterval(loadData, 30000);
     });
 </script>
 {% endblock %}

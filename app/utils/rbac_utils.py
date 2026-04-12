@@ -92,6 +92,7 @@ def filter_response_data(data, permissions):
             # Ocultar contadores de baterías
             filtered_data['battery_alerts_count'] = 0
             filtered_data['ac_failures_count'] = 0
+            filtered_data['disconnection_count'] = 0
             
             # Ocultar datos de baterías en las secciones
             if 'access' in filtered_data and isinstance(filtered_data['access'], dict):

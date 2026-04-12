@@ -9,6 +9,7 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 logging.getLogger('werkzeug').setLevel(logging.INFO)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 from app import create_app
 import threading

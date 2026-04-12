@@ -324,15 +324,20 @@ def get_ac_data():
         conn.set_session(readonly=True)
         cur = conn.cursor()
 
-        # 1️⃣ Traer todas las alarmas AC_FAIL activas
+        # 1️⃣ Traer todas las alarmas AC_FAIL/GE activas con priorización
         cur.execute("""
-            SELECT MAX(a.hora) AS max_hora, a.tipo, a.region, a.sitio, a.deviceName,
-                   string_agg(DISTINCT a.alarma, ',') AS all_alarms,
-                   a.device_id,
-                   MAX(a.valor) AS max_valor
+            SELECT 
+                MAX(a.hora) AS max_hora, 
+                a.tipo, 
+                a.region, 
+                a.sitio, 
+                (ARRAY_AGG(a.deviceName ORDER BY CASE WHEN a.categoria = 'AC_FAIL' THEN 1 ELSE 2 END, a.hora DESC))[1] as deviceName,
+                string_agg(DISTINCT a.alarma, ',') AS all_alarms,
+                (ARRAY_AGG(a.device_id ORDER BY CASE WHEN a.categoria = 'AC_FAIL' THEN 1 ELSE 2 END, a.hora DESC))[1] as device_id,
+                MAX(a.valor) AS max_valor
             FROM alarmas_activas a
-            WHERE a.estado = 'on' AND a.categoria = 'AC_FAIL'
-            GROUP BY a.sitio, a.tipo, a.region, a.deviceName, a.device_id
+            WHERE a.estado = 'on' AND a.categoria IN ('AC_FAIL', 'AC_FAIL_GE')
+            GROUP BY a.sitio, a.tipo, a.region
             ORDER BY max_hora DESC
         """)
         alarm_rows = cur.fetchall()
@@ -396,6 +401,8 @@ def get_ac_data():
             baterias = []
             todos_los_voltajes = []
             site_svolt, site_current1, site_current2 = None, None, None
+            site_volt_gen = None
+            site_corriente_gen = None
 
             for b in site_telemetry:
                 if b["voltaje"] is not None and b["voltaje"] > 0:
@@ -408,6 +415,11 @@ def get_ac_data():
                     site_current1 = b["current1"]
                 if site_current2 is None or (b["current2"] is not None and b["current2"] != 0):
                     site_current2 = b["current2"]
+
+                # Búsqueda selectiva: Identificar voltajes y corrientes de Grupo Electrógeno
+                if b["nombre"] and 'Grupo Electrógeno' in b["nombre"]:
+                    site_volt_gen = b["voltaje"]
+                    site_corriente_gen = b["carga"]
 
                 # Filtrar solo baterías (evitar rectificadores u otros equipos)
                 # Mejorado: Chequear nombre del dispositivo o tipo si estuviera disponible
@@ -470,6 +482,10 @@ def get_ac_data():
             if todos_los_voltajes:
                 voltaje_final = max(todos_los_voltajes)
 
+            # Fallback final: Usar el voltaje del bus de sitio si no hay valor de alarma ni equipos soporte específicos
+            if voltaje_final is None:
+                voltaje_final = site_svolt
+
             alarma_display = f"{voltaje_final}V" if voltaje_final is not None else "N/A"
 
             records.append({
@@ -479,6 +495,8 @@ def get_ac_data():
                 "sitio": sitio,
                 "voltaje": alarma_display,
                 "svoltaje": site_svolt,
+                "voltaje_gen": site_volt_gen,
+                "corriente_gen": site_corriente_gen,
                 "current1": site_current1,
                 "current2": site_current2,
                 "baterias": baterias
