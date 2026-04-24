@@ -60,12 +60,31 @@
 
     .battery-mini-card {
         background: var(--card-bg);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 12px 16px;
         border: 1px solid var(--table-border);
+        border-left-width: 4px;
         min-width: 160px;
         flex: 0 0 auto;
         transition: background 0.3s ease;
+    }
+
+    .battery-mini-card.discharging {
+        background-color: rgba(206, 15, 105, 0.05);
+        border-color: var(--yofc-pink-40);
+        border-left-color: var(--yofc-pink);
+    }
+
+    .battery-mini-card.charging {
+        background-color: rgba(165, 200, 75, 0.05);
+        border-color: var(--yofc-green-40);
+        border-left-color: var(--yofc-green);
+    }
+
+    .battery-mini-card.idle {
+        background-color: rgba(255, 185, 50, 0.05);
+        border-color: var(--yofc-yellow-40);
+        border-left-color: var(--yofc-yellow);
     }
 
     .battery-mini-header {
@@ -279,18 +298,18 @@
     }
 
     .status-pill.idle {
-        color: #10b981;
-        background-color: rgba(16, 185, 129, 0.1);
+        color: var(--yofc-yellow);
+        background-color: rgba(255, 185, 50, 0.1);
     }
 
     .status-pill.discharging {
-        color: #f59e0b;
-        background-color: rgba(245, 158, 11, 0.1);
+        color: var(--yofc-pink);
+        background-color: rgba(206, 15, 105, 0.1);
     }
 
     .status-pill.other {
-        color: #3b82f6;
-        background-color: rgba(59, 130, 246, 0.1);
+        color: var(--yofc-blue);
+        background-color: rgba(0, 156, 222, 0.1);
     }
 
     /* Notificaciones mejoradas */
@@ -308,12 +327,12 @@
     }
 
     .notification.success {
-        background: #10b981;
+        background: var(--yofc-green);
         color: white;
     }
 
     .notification.error {
-        background: #ef4444;
+        background: var(--yofc-pink);
         color: white;
     }
 
@@ -406,7 +425,7 @@
     }
 
     .modal-close:hover {
-        background: #ef4444;
+        background: var(--yofc-pink);
         color: white;
     }
 
@@ -441,7 +460,7 @@
     .copyable-summary-container {
         margin-top: 15px;
         background: #ffffff;
-        border: 2px solid #16a34a;
+        border: 2px solid var(--yofc-green);
         border-radius: 8px;
         padding: 15px;
         display: none;
@@ -449,18 +468,18 @@
     }
 
     .copyable-summary-text {
-        font-family: 'Courier New', Courier, monospace;
+        font-family: 'Montserrat', monospace;
         font-size: 0.9rem;
         color: #000000;
         word-break: break-all;
         margin-bottom: 12px;
         user-select: all;
         line-height: 1.4;
-        font-weight: 600;
+        font-weight: 500;
     }
 
     .btn-download {
-        background: #0d89c6;
+        background: var(--yofc-blue);
         color: white;
         border: none;
         padding: 8px 16px;
@@ -473,12 +492,12 @@
     }
 
     .btn-download:hover {
-        background: #0b75a8;
+        background: var(--yofc-blue-60);
         transform: translateY(-2px);
     }
 
     .btn-export-excel {
-        background: #16a34a;
+        background: var(--yofc-green);
         color: white;
         border: none;
         padding: 8px 16px;
@@ -494,9 +513,9 @@
     }
 
     .btn-export-excel:hover {
-        background: #15803d;
+        background: var(--yofc-green-60);
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+        box-shadow: 0 4px 12px rgba(165, 200, 75, 0.3);
     }
 
     /* PREMIUM MODAL REDESIGN STYLES */
@@ -506,11 +525,11 @@
         border: 1px solid #e2e8f0;
         border-radius: 8px;
         overflow: hidden;
-        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Montserrat', sans-serif;
     }
 
     .modal-qir-header {
-        border-top: 4px solid #ef4444;
+        border-top: 4px solid var(--yofc-pink);
         background: #ffffff;
         padding: 20px 24px;
         display: flex;
@@ -527,7 +546,7 @@
     }
 
     .modal-qir-id {
-        color: #ef4444;
+        color: var(--yofc-pink);
         font-weight: 800;
         font-size: 1.1rem;
     }
@@ -587,21 +606,21 @@
     }
 
     .modal-qir-bat-card.discharging {
-        background-color: #fff5f5;
-        border-color: #feb2b2;
-        border-left-color: #ef4444;
+        background-color: rgba(206, 15, 105, 0.05);
+        border-color: var(--yofc-pink-40);
+        border-left-color: var(--yofc-pink);
     }
 
     .modal-qir-bat-card.charging {
-        background-color: #f0fff4;
-        border-color: #9ae6b4;
-        border-left-color: #16a34a;
+        background-color: rgba(165, 200, 75, 0.05);
+        border-color: var(--yofc-green-40);
+        border-left-color: var(--yofc-green);
     }
 
     .modal-qir-bat-card.idle {
-        background-color: #fffdf2;
-        border-color: #fef3c7;
-        border-left-color: #f59e0b;
+        background-color: rgba(255, 185, 50, 0.05);
+        border-color: var(--yofc-yellow-40);
+        border-left-color: var(--yofc-yellow);
     }
 
     .modal-qir-bat-header {
@@ -629,18 +648,18 @@
     }
 
     .modal-qir-bat-badge.badge-discharging {
-        background-color: #fee2e2;
-        color: #ef4444;
+        background-color: rgba(206, 15, 105, 0.15);
+        color: var(--yofc-pink);
     }
 
     .modal-qir-bat-badge.badge-charging {
-        background-color: #dcfce7;
-        color: #16a34a;
+        background-color: rgba(165, 200, 75, 0.15);
+        color: var(--yofc-green);
     }
 
     .modal-qir-bat-badge.badge-idle {
-        background-color: #fef3c7;
-        color: #b45309;
+        background-color: rgba(255, 185, 50, 0.15);
+        color: var(--yofc-yellow);
     }
 
     .modal-qir-bat-badge .dot {
@@ -649,9 +668,9 @@
         border-radius: 50%;
     }
 
-    .modal-qir-bat-badge.badge-discharging .dot { background-color: #ef4444; }
-    .modal-qir-bat-badge.badge-charging .dot { background-color: #16a34a; }
-    .modal-qir-bat-badge.badge-idle .dot { background-color: #b45309; }
+    .modal-qir-bat-badge.badge-discharging .dot { background-color: var(--yofc-pink); }
+    .modal-qir-bat-badge.badge-charging .dot { background-color: var(--yofc-green); }
+    .modal-qir-bat-badge.badge-idle .dot { background-color: var(--yofc-yellow); }
 
     .modal-qir-bat-soc {
         font-size: 1.4rem;
@@ -667,12 +686,12 @@
         margin-bottom: 6px;
     }
 
-    .modal-qir-bat-current.neg { color: #ef4444; }
-    .modal-qir-bat-current.pos { color: #16a34a; }
+    .modal-qir-bat-current.neg { color: var(--yofc-pink); }
+    .modal-qir-bat-current.pos { color: var(--yofc-green); }
 
     .modal-qir-bat-update {
         font-size: 0.65rem;
-        color: #94a3b8;
+        color: var(--text-muted);
         font-weight: 500;
     }
 
@@ -684,7 +703,7 @@
         justify-content: space-between;
         align-items: center;
         font-size: 0.7rem;
-        color: #94a3b8;
+        color: var(--text-muted);
     }
 
     .modal-qir-footer span {

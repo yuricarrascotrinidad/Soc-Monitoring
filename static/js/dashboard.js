@@ -205,7 +205,7 @@ const DashboardManager = {
                 for (const [url, error] of Object.entries(data.connection_errors)) {
                     const errorKey = url + (error || '');
                     if (error && !this.state.shownErrors.has(errorKey)) {
-                        alert(error);
+                        console.error("Connection error:", error);
                         // Clean up previous errors for this URL to keep Set small
                         this.state.shownErrors.forEach(key => {
                             if (key.startsWith(url)) this.state.shownErrors.delete(key);
@@ -274,6 +274,8 @@ const DashboardManager = {
             this.updateElementText('battery-alerts-count', data.battery_alerts_count);
             this.updateElementText('disconnection-count', data.disconnection_count || 0);
             this.updateElementText('hvac-alerts-count', data.hvac_total_count || 0);
+            this.updateElementText('rectifier-alerts-count', data.rectifier_alerts_count || 0);
+            this.updateElementText('show-battery-count', data.show_battery_count || 0);
 
             const batteryBadge = document.getElementById('battery-alerts-count');
             if (batteryBadge) {

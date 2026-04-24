@@ -1,4 +1,6 @@
 from flask import Blueprint, jsonify, send_file
+import logging
+from psycopg2 import extras
 from app.services.monitoring_service import MonitoringService
 from app.services.camera_service import CameraService
 from app.services.export_service import ExportService
@@ -52,12 +54,12 @@ def get_cameras_list():
         cur = conn.cursor()
         
         # Access Cameras
-        cur.execute("SELECT site, ip FROM access_cameras")
-        access_cameras = [{"site": row[0], "ip": row[1]} for row in cur.fetchall()]
+        cur.execute("SELECT id, site, ip FROM access_cameras")
+        access_cameras = [{"id": row[0], "site": row[1], "ip": row[2]} for row in cur.fetchall()]
         
         # Transport Cameras
-        cur.execute("SELECT site, position, ip FROM transport_cameras")
-        transport_cameras = [{"site": row[0], "position": row[1], "ip": row[2]} for row in cur.fetchall()]
+        cur.execute("SELECT id, site, position, ip FROM transport_cameras")
+        transport_cameras = [{"id": row[0], "site": row[1], "position": row[2], "ip": row[3]} for row in cur.fetchall()]
         
         # ✅ ELIMINAR TODA LA LÓGICA DE JWT
         # Simplemente devolver todas las cámaras sin filtrar
@@ -253,6 +255,11 @@ def get_battery_data():
         for row in rows:
             hora, tipo, region, sitio, dispositivo, alarma_desc, soc, carga, descarga, ultimo_update, device_id, active_battery_alarms, conexion = row
             
+            # Filtro Global: Omitir dispositivos virtuales/agregados (_Battery)
+            if dispositivo and str(dispositivo).strip().endswith('_Battery'):
+                continue
+
+            
             umbral = 0.0
             if alarma_desc and "muy baja" in alarma_desc.lower():
                 umbral = 29.0
@@ -352,13 +359,27 @@ def get_ac_data():
         else:
             sitios_param = tuple(sitios)
 
-        # 2️⃣ Traer toda la telemetría en una sola consulta usando IN
+        # 2️⃣ Traer toda la telemetría de todas las fuentes posibles (Prioridad, Rectificadores, Global)
         cur.execute("""
             SELECT t.device_id, t.sitio, t.nombre, t.soc, t.carga, t.descarga, t.ultimo_update,
-                   t.voltaje, t.svoltage, t.current1, t.current2, t.conexion
+                   t.voltaje, t.svoltage, t.current1, t.current2, t.conexion,
+                   t.tipo_dispositivo, t.voltaje_gen, t.corriente_gen, 1 as source_priority
             FROM battery_telemetry t
             WHERE t.sitio IN %s
-        """, (sitios_param,))
+            UNION ALL
+            SELECT r.device_id, r.sitio, r.nombre, NULL as soc, NULL as carga, NULL as descarga, r.ultimo_update,
+                   r.voltaje, r.svoltage, r.current1, r.current2, r.conexion,
+                   r.tipo_dispositivo, NULL as voltaje_gen, NULL as corriente_gen, 2 as source_priority
+            FROM rectifier_telemetry r
+            WHERE r.sitio IN %s
+            UNION ALL
+            SELECT g.device_id, g.sitio, g.nombre, g.soc, NULL as carga, NULL as descarga, g.ultimo_update,
+                   NULL as voltaje, NULL as svoltage, NULL as current1, NULL as current2, g.conexion,
+                   g.tipo_dispositivo, NULL as voltaje_gen, NULL as corriente_gen, 3 as source_priority
+            FROM battery_telemetry_global g
+            WHERE g.sitio IN %s
+            ORDER BY source_priority ASC
+        """, (sitios_param, sitios_param, sitios_param))
         telemetry_rows = cur.fetchall()
 
         # ✅ Cerrar cursor explícitamente antes de procesar (liberar recursos)
@@ -366,8 +387,17 @@ def get_ac_data():
 
         # 3️⃣ Procesar en memoria (ya sin conexión activa a DB)
         telemetry_by_sitio = {}
+        dispositivos_procesados = set() # (sitio, device_id, nombre)
+
         for row in telemetry_rows:
-            t_id, sitio, nombre, soc, carga, descarga, ultimo_update, voltaje, svolt, current1, current2, conexion = row
+            t_id, sitio, nombre, soc, carga, descarga, ultimo_update, voltaje, svolt, current1, current2, conexion, td, v_gen, c_gen, _prio = row
+            
+            # Evitar duplicados: Si ya tenemos este equipo de una fuente con mayor prioridad, ignorar el resto
+            key = (sitio, t_id, nombre)
+            if key in dispositivos_procesados:
+                continue
+            dispositivos_procesados.add(key)
+
             if sitio not in telemetry_by_sitio:
                 telemetry_by_sitio[sitio] = []
             
@@ -387,7 +417,10 @@ def get_ac_data():
                 "svolt": svolt,
                 "current1": current1,
                 "current2": current2,
-                "conexion": conexion
+                "conexion": conexion,
+                "tipo_dispositivo": td,
+                "voltaje_gen": v_gen,
+                "corriente_gen": c_gen
             })
 
         records = []
@@ -405,62 +438,41 @@ def get_ac_data():
             site_corriente_gen = None
 
             for b in site_telemetry:
-                if b["voltaje"] is not None and b["voltaje"] > 0:
-                    todos_los_voltajes.append(b["voltaje"])
+                # Omitir registros agregados _Battery en la lista de baterías individuales
+                if b["nombre"] and b["nombre"].strip().endswith('_Battery'):
+                    continue
 
-                # Valores del sitio (primera batería que tenga valores)
-                if site_svolt is None or (b["svolt"] is not None and b["svolt"] > 0):
-                    site_svolt = b["svolt"]
-                if site_current1 is None or (b["current1"] is not None and b["current1"] != 0):
-                    site_current1 = b["current1"]
-                if site_current2 is None or (b["current2"] is not None and b["current2"] != 0):
-                    site_current2 = b["current2"]
-
-                # Búsqueda selectiva: Identificar voltajes y corrientes de Grupo Electrógeno
-                if b["nombre"] and 'Grupo Electrógeno' in b["nombre"]:
-                    site_volt_gen = b["voltaje"]
-                    site_corriente_gen = b["carga"]
-
-                # Filtrar solo baterías (evitar rectificadores u otros equipos)
-                # Mejorado: Chequear nombre del dispositivo o tipo si estuviera disponible
-                nombre_bat = (b["nombre"] or "").lower()
-                is_battery = any(word in nombre_bat for word in ['bater', 'lithium', 'litio', 'bat'])
-                
-                if is_battery:
-                    # Para baterías ZTE, usar current1 para determinar carga/descarga si carga/descarga son None
-                    # (El nuevo hilo de telemetría ya debería traer valores normalizados, pero mantenemos compatibilidad)
-                    carga_val = b["carga"]
-                    descarga_val = b["descarga"]
+                # Priorizar valores del Rectificador para el Encabezado del Sitio
+                if b["tipo_dispositivo"] == 'Rectificador':
+                    # site_svolt debe ser lo que el dashboard muestra como "Voltaje" o "Svoltaje"
+                    if site_svolt is None or (b["svolt"] is not None and b["svolt"] > 0):
+                        site_svolt = b["svolt"]
                     
-                    if 'zte' in nombre_bat:
-                        # Si current1 está presente, derivamos carga/descarga
-                        if b["current1"] is not None:
-                            if b["current1"] < 0:
-                                descarga_val = abs(b["current1"])
-                                carga_val = 0
-                            elif b["current1"] > 0:
-                                carga_val = b["current1"]
-                                descarga_val = 0
-                            else:
-                                carga_val = 0
-                                descarga_val = 0
+                    if site_current1 is None or (b["current1"] is not None and b["current1"] != 0):
+                        site_current1 = b["current1"]
+                    if site_current2 is None or (b["current2"] is not None and b["current2"] != 0):
+                        site_current2 = b["current2"]
                     
-                    # Determinar estado
-                    estado = "IDLE"
-                    if b["soc"] is None:
-                        estado = "NO DATA"
-                    elif (carga_val or 0) > 0:
-                        estado = "CHARGING"
-                    elif (descarga_val or 0) > 0:
-                        estado = "DISCHARGING"
+                    # Para el voltaje principal del sitio (en la columna "Voltaje")
+                    if b["voltaje"] is not None:
+                        todos_los_voltajes.append(b["voltaje"])
+                    elif b["svolt"] is not None and b["svolt"] > 0:
+                        todos_los_voltajes.append(b["svolt"])
 
+                # Priorizar valores del Generador
+                if b["tipo_dispositivo"] == 'Generador':
+                    site_volt_gen = b["voltaje_gen"]
+                    site_corriente_gen = b["corriente_gen"]
+
+                # Identificar Baterías
+                if b["tipo_dispositivo"] in ['Litio', 'ZTE']:
                     baterias.append({
                         "device_id": b["device_id"],
                         "nombre": b["nombre"],
                         "soc": b["soc"],
-                        "carga": carga_val,
-                        "descarga": descarga_val,
-                        "estado": estado,
+                        "carga": b["carga"],
+                        "descarga": b["descarga"],
+                        "estado": "DISCHARGING" if (b["descarga"] or 0) > 0 else "CHARGING" if (b["carga"] or 0) > 0 else "IDLE" if b["soc"] is not None else "NO DATA",
                         "conexion": 1 if (b["conexion"] == 1 or b["conexion"] is True) else 0,
                         "ultimo_update": b["ultimo_update"]
                     })
@@ -602,3 +614,234 @@ def exportar_excel_desconexion():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/api/cameras/manage', methods=['POST'])
+@jwt_required()
+def manage_cameras():
+    from flask import request
+    try:
+        claims = get_jwt()
+        if claims.get("role") != "admin":
+            return jsonify({"error": "Forbidden: Requires admin role"}), 403
+
+        data = request.json
+        action = data.get('action')
+        c_type = data.get('type')
+        c_id = data.get('id')
+        site = data.get('site')
+        ip = data.get('ip')
+        position = data.get('position')
+
+        if not action or c_type not in ['access', 'transport']:
+            return jsonify({'error': 'Invalid payload'}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        try:
+            if action == 'delete':
+                if not c_id: return jsonify({'error': 'ID required for deletion'}), 400
+                table = 'access_cameras' if c_type == 'access' else 'transport_cameras'
+                cur.execute(f"DELETE FROM {table} WHERE id = %s", (c_id,))
+                
+            elif action == 'create':
+                if not site or not ip: return jsonify({'error': 'Missing fields'}), 400
+                if c_type == 'access':
+                    cur.execute("INSERT INTO access_cameras (site, ip) VALUES (%s, %s)", (site, ip))
+                else:
+                    cur.execute("INSERT INTO transport_cameras (site, position, ip) VALUES (%s, %s, %s)", (site, position or '', ip))
+                    
+            elif action == 'edit':
+                if not c_id or not site or not ip: return jsonify({'error': 'Missing fields'}), 400
+                if c_type == 'access':
+                    cur.execute("UPDATE access_cameras SET site = %s, ip = %s WHERE id = %s", (site, ip, c_id))
+                else:
+                    cur.execute("UPDATE transport_cameras SET site = %s, position = %s, ip = %s WHERE id = %s", (site, position or '', ip, c_id))
+            else:
+                return jsonify({'error': 'Invalid action'}), 400
+
+            conn.commit()
+            return jsonify({'success': True})
+        except Exception as query_error:
+            conn.rollback()
+            raise query_error
+        finally:
+            cur.close()
+            conn.close()
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/api/battery_show_data')
+@jwt_required()
+def get_battery_show_data():
+    """
+    Endpoint para show_battery.html - Los datos vienen del nuevo BatteryService
+    """
+    conn = get_db_connection()
+    try:
+        claims = get_jwt()
+        permissions = claims.get("permissions", {})
+        if not permissions.get('view_batteries', False):
+            return jsonify({
+                "summary": {"total": 0, "critical": 0, "caution": 0, "normal": 0, "no_data": 0, "access_count": 0, "transport_count": 0},
+                "records": []
+            })
+        
+        conn.set_session(readonly=True)
+        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        
+        # Obtener telemetría de todos los sitios (Modo Global - 1h)
+        cur.execute("""
+            SELECT 
+                t.*,
+                (SELECT COUNT(*) FROM alarmas_activas a WHERE a.device_id = t.device_id AND a.sitio = t.sitio AND a.estado = 'on') as alarm_count
+            FROM battery_telemetry_global t
+            ORDER BY t.ultimo_update DESC
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        
+        records = []
+        summary = {
+            "total": 0, "critical": 0, "caution": 0, "normal": 0, "no_data": 0,
+            "access_count": 0, "transport_count": 0, "rectifiers": 0, "litio": 0, "zte": 0
+        }
+        
+        for row in rows:
+            # Filtrar dispositivos con nombre terminado en _Battery (ej: A3444_Battery)
+            if row['nombre'] and row['nombre'].strip().endswith('_Battery'):
+                continue
+
+            # Determinación de estado simplificada para el dashboard
+            estado_label = "IDLE"
+            soc = row['soc'] if 'soc' in row else None
+            carga = row['carga'] if 'carga' in row else None
+            descarga = row['descarga'] if 'descarga' in row else None
+            tipo_dispositivo = row['tipo_dispositivo'] if 'tipo_dispositivo' in row else None
+            
+            if soc is None:
+                if tipo_dispositivo == 'Rectificador':
+                    estado_label = "NORMAL" # Rectificadores no tienen SOC
+                else:
+                    estado_label = "NO DATA"
+            elif (carga or 0) > 0:
+                estado_label = "CHARGING"
+            elif (descarga or 0) > 0:
+                estado_label = "DISCHARGING"
+            else:
+                estado_label = "IDLE"
+
+            # Actualizar summary
+            summary["total"] += 1
+            if estado_label == "DISCHARGING": summary["critical"] += 1
+            elif estado_label == "CHARGING": summary["normal"] += 1
+            elif estado_label == "IDLE": summary["caution"] += 1
+            elif estado_label == "NO DATA": summary["no_data"] += 1
+            
+            if 'tipo_sistema' in row and row['tipo_sistema'] == "access": summary["access_count"] += 1
+            else: summary["transport_count"] += 1
+
+            if tipo_dispositivo == 'Rectificador': summary["rectifiers"] += 1
+            elif tipo_dispositivo == 'Litio': summary["litio"] += 1
+            elif tipo_dispositivo == 'ZTE': summary["zte"] += 1
+            
+            records.append({
+                "hora": row['ultimo_update'].strftime("%Y-%m-%d %H:%M:%S") if ('ultimo_update' in row and row['ultimo_update']) else "N/A",
+                "tipo": row['tipo_sistema'].capitalize() if ('tipo_sistema' in row and row['tipo_sistema']) else "Unknown",
+                "region": row['region'] if 'region' in row else None,
+                "sitio": row['sitio'] if 'sitio' in row else None,
+                "dispositivo": row['nombre'] if 'nombre' in row else None,
+                "tipo_dispositivo": tipo_dispositivo,
+                "soc": soc,
+                "capacidad": f"{row['capacidad']:.1f} Ah" if ('capacidad' in row and row['capacidad']) else None,
+                "estado": estado_label,
+                "has_battery_alarm": (row['alarm_count'] if 'alarm_count' in row else 0) > 0,
+                "conexion": 1 if ('conexion' in row and row['conexion'] == 1) else 0,
+                "carga": carga,
+                "descarga": descarga,
+                "voltaje": row['voltaje'] if 'voltaje' in row else None,
+                "svoltage": row['svoltage'] if 'svoltage' in row else None,
+                "current1": row['current1'] if 'current1' in row else None,
+                "current2": row['current2'] if 'current2' in row else None,
+                "voltaje_gen": row['voltaje_gen'] if 'voltaje_gen' in row else None,
+                "corriente_gen": row['corriente_gen'] if 'corriente_gen' in row else None
+            })
+
+        return jsonify({
+            "summary": summary,
+            "records": records
+        })
+    except Exception as e:
+        import traceback
+        logging.error(f"Error en get_battery_show_data: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e), "summary": {}, "records": []}), 500
+    finally:
+        conn.close()
+
+@api_bp.route('/api/rectifier_data')
+@jwt_required()
+def get_rectifier_data():
+    """
+    Endpoint para rectifier_monitor.html
+    """
+    conn = get_db_connection()
+    try:
+        claims = get_jwt()
+        permissions = claims.get("permissions", {})
+        if not permissions.get('view_batteries', False):
+            return jsonify({"records": [], "summary": {}})
+        
+        conn.set_session(readonly=True)
+        cur = conn.cursor(cursor_factory=extras.RealDictCursor)
+        
+        cur.execute("""
+            SELECT * FROM rectifier_telemetry 
+            ORDER BY sitio ASC, nombre ASC
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        
+        records = []
+        summary = {"total": 0, "access": 0, "transport": 0, "low_voltage": 0}
+        
+        for row in rows:
+            # Filtrar dispositivos con nombre terminado en _Battery (ej: A3444_Battery)
+            if row['nombre'] and row['nombre'].strip().endswith('_Battery'):
+                continue
+                
+            summary["total"] += 1
+            if row['tipo_sistema'] == 'access': summary["access"] += 1
+            else: summary["transport"] += 1
+            
+            v1 = row['voltaje'] if ('voltaje' in row and row['voltaje'] is not None) else None
+            v2 = row['svoltage'] if ('svoltage' in row and row['svoltage'] is not None) else None
+            
+            # Alerta si el voltaje es menor a 48V (incluyendo 0V que es falla total)
+            if (v1 is not None and v1 < 48) or (v2 is not None and v2 < 48):
+                summary["low_voltage"] += 1
+                
+            records.append({
+                "hora": row['ultimo_update'].strftime("%Y-%m-%d %H:%M:%S") if row['ultimo_update'] else "N/A",
+                "sitio": row['sitio'],
+                "dispositivo": row['nombre'],
+                "region": row['region'],
+                "tipo": row['tipo_sistema'].capitalize() if row['tipo_sistema'] else "Unknown",
+                "v1": row['voltaje'],
+                "v2": row['svoltage'],
+                "c1": row['current1'],
+                "c2": row['current2'],
+                "conexion": row['conexion']
+            })
+            
+        return jsonify({"records": records, "summary": summary})
+    except Exception as e:
+        import traceback
+        logging.error(f"Error en get_rectifier_data: {e}")
+        traceback.print_exc()
+        return jsonify({"records": [], "summary": {}}), 500
+    finally:
+        conn.close()

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Cameras - SOC{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header" style="position: relative;">
+        <!-- Logotipo YOFC Oficial -->
+        <div class="brand-logo-container" style="position: absolute; left: 30px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-start; user-select: none;">
+            <div style="font-size: 56px; font-weight: 800; letter-spacing: -2px; line-height: 1; display: flex;">
+                <span style="color: var(--yofc-pink);">Y</span><span style="color: var(--yofc-yellow);">O</span><span style="color: var(--yofc-green);">F</span><span style="color: var(--yofc-blue);">C</span>
+            </div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--text-color); margin-top: 8px; letter-spacing: 0.1px;">
+                Smart Link Better Life.
+            </div>
+        </div>
+
+        <h1 id="siDtitle" style="display: flex; justify-content: center; align-items: center; margin: 0;">
+            <span>Camera Management</span>
+        </h1>
+        <p style="margin-top: 8px;">Configure Access and Transport camera network settings</p>
+    </div>
+
+    <!-- TABS & ACTIONS -->
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 20px;">
+        <div class="tabs-container" style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <button class="btn tab-btn active" data-target="access-tab" style="padding: 10px 30px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s; background: var(--yofc-pink); color: white; border: none;">Access Cameras</button>
+            <button class="btn tab-btn" data-target="transport-tab" style="padding: 10px 30px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);">Transport Cameras</button>
+        </div>
+        <div style="width: 100%; max-width: 600px; position: relative;">
+            <i class="fas fa-search" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-light);"></i>
+            <input type="text" id="cameraSearch" placeholder="Search by site name or IP address..." style="width: 100%; padding: 12px 12px 12px 40px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); font-size: 1em; box-sizing: border-box; box-shadow: 0 2px 4px var(--shadow-color);">
+        </div>
+    </div>
+
+    <!-- ACCESS CAMERAS SECTION -->
+    <div id="access-tab" class="camera-section">
+        <div class="card" style="padding: 20px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px var(--shadow-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Access Camera Database</h3>
+                <button class="btn add-cam-btn" data-type="access" style="background: var(--yofc-blue); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold;"><i class="fas fa-plus"></i> Add Access Camera</button>
+            </div>
+            <div class="table-responsive" style="overflow-x: auto;">
+                <table class="data-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                            <th style="padding: 12px; color: var(--text-light);">ID</th>
+                            <th style="padding: 12px; color: var(--text-light);">Site</th>
+                            <th style="padding: 12px; color: var(--text-light);">IP Address</th>
+                            <th style="padding: 12px; color: var(--text-light); text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="access-table-body">
+                        <!-- Filled via JS -->
+                        <tr><td colspan="4" style="text-align:center; padding: 20px;">Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRANSPORT CAMERAS SECTION -->
+    <div id="transport-tab" class="camera-section" style="display: none;">
+        <div class="card" style="padding: 20px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px var(--shadow-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Transport Camera Database</h3>
+                <button class="btn add-cam-btn" data-type="transport" style="background: var(--yofc-blue); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold;"><i class="fas fa-plus"></i> Add Transport Camera</button>
+            </div>
+            <div class="table-responsive" style="overflow-x: auto;">
+                <table class="data-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                            <th style="padding: 12px; color: var(--text-light);">ID</th>
+                            <th style="padding: 12px; color: var(--text-light);">Site</th>
+                            <th style="padding: 12px; color: var(--text-light);">Position</th>
+                            <th style="padding: 12px; color: var(--text-light);">IP Address</th>
+                            <th style="padding: 12px; color: var(--text-light); text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transport-table-body">
+                        <!-- Filled via JS -->
+                        <tr><td colspan="5" style="text-align:center; padding: 20px;">Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Editor Modal -->
+<div id="cameraModal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="modal-content" style="background: var(--card-bg); width: 450px; border-radius: 15px; padding: 30px; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <button id="closeModal" style="position: absolute; right: 20px; top: 20px; background: none; border: none; font-size: 1.5em; color: var(--text-muted); cursor: pointer;"><i class="fas fa-times"></i></button>
+        
+        <h2 id="modalTitle" style="margin-top: 0; color: var(--text-color);">Add Camera</h2>
+        
+        <form id="cameraForm">
+            <input type="hidden" id="camId">
+            <input type="hidden" id="camAction" value="create">
+            <input type="hidden" id="camType" value="access">
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; color: var(--text-light);">Site Name</label>
+                <input type="text" id="camSite" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--body-bg); color: var(--text-color); box-sizing: border-box;">
+            </div>
+
+            <div id="positionContainer" style="margin-bottom: 15px; display: none;">
+                <label style="display: block; margin-bottom: 5px; color: var(--text-light);">Position <small>(Transport only)</small></label>
+                <select id="camPosition" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--body-bg); color: var(--text-color); box-sizing: border-box;">
+                    <option value="">Seleccione posición...</option>
+                    <option value="principal">Principal</option>
+                    <option value="patio">Patio</option>
+                    <option value="equipo">Equipo</option>
+                    <option value="generador">Generador</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; margin-bottom: 5px; color: var(--text-light);">IP Address</label>
+                <input type="text" id="camIp" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--body-bg); color: var(--text-color); box-sizing: border-box;" placeholder="192.168.1.100">
+            </div>
+
+            <button type="submit" style="width: 100%; padding: 12px; background: var(--yofc-green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1em;">Save Configuration</button>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='js/edit_camera.js') }}?v=1.2"></script>
+{% endblock %}

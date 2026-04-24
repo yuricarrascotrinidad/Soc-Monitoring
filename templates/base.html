@@ -9,6 +9,9 @@
     <link rel="stylesheet" href="/static/css/dashboard.css?v=2.4">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <!-- Permitir estilos extra por página -->
     {% block styles %}{% endblock %}
     <script>
@@ -129,13 +132,19 @@
         <button class="sidebar-toggle" id="sidebarToggle" title="Colapsar menú">
             <i class="fas fa-chevron-left"></i>
         </button>
-        <div class="sidebar-header">
-            <h2 id="sidtitle">
-                <span class="yof">YOFC</span><span class="soc">SOC</span>
-            </h2>
-            <!--<button class="theme-toggle-sidebar" id="sidebarThemeToggle" title="Cambiar tema">
-                🌓
-            </button>-->
+        <div class="sidebar-header" style="padding: 25px 0;">
+            <div class="brand-logo-container"
+                style="display: flex; flex-direction: column; align-items: flex-start; user-select: none; margin-left: 10px;">
+                <div style="font-size: 42px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; display: flex;">
+                    <span style="color: var(--yofc-pink);">Y</span><span
+                        style="color: var(--yofc-yellow);">O</span><span style="color: var(--yofc-green);">F</span><span
+                        style="color: var(--yofc-blue);">C</span>
+                </div>
+                <div
+                    style="font-size: 11.5px; font-weight: 800; color: var(--sidebar-text); margin-top: 5px; letter-spacing: 0.2px;">
+                    Smart Link Better Life.
+                </div>
+            </div>
         </div>
 
         <div class="modules">
@@ -170,17 +179,20 @@
             <div class="module-group">
                 <div class="module-group-title">CAMERAS</div>
                 <div class="module-group-content">
-                    <div class="module-item" data-module="camera-list" onclick="window.location.href='/camera_list'" title="Camera list">
+                    <!--<div class="module-item" data-module="camera-list" onclick="window.location.href='/camera_list'"
+                        title="Camera list">
                         <i class="fas fa-th-list module-icon"></i>
                         <div class="module-name">Camera list</div>
                         <div class="module-badge" id="total-cameras">...</div>
-                    </div>
-                    <div class="module-item" data-module="access-cameras" onclick="window.location.href='/access_camera'" title="Access camera">
+                    </div>-->
+                    <div class="module-item" data-module="access-cameras"
+                        onclick="window.location.href='/access_camera'" title="Access camera">
                         <i class="fas fa-camera module-icon"></i>
                         <div class="module-name">Access camera</div>
                         <div class="module-badge" id="access-cameras-count">...</div>
                     </div>
-                    <div class="module-item" data-module="transport-cameras" onclick="window.location.href='/transport_camera'" title="Transport camera">
+                    <div class="module-item" data-module="transport-cameras"
+                        onclick="window.location.href='/transport_camera'" title="Transport camera">
                         <i class="fas fa-video module-icon"></i>
                         <div class="module-name">Transport camera</div>
                         <div class="module-badge" id="transport-cameras-count">...</div>
@@ -192,25 +204,32 @@
             <div class="module-group">
                 <div class="module-group-title">BATTERIES</div>
                 <div class="module-group-content">
-                    <div class="module-item" data-module="battery" onclick="window.location.href='/battery'" title="Battery">
+                    <div class="module-item" data-module="battery" onclick="window.location.href='/battery'"
+                        title="Battery">
                         <i class="fas fa-battery-three-quarters module-icon"></i>
                         <div class="module-name">Battery</div>
                         <div class="module-badge" id="battery-alerts-count">...</div>
                     </div>
-                    <div class="module-item" data-module="falla-ac" onclick="window.location.href='/falla_ac'" title="Electric failure">
+                    <div class="module-item" data-module="falla-ac" onclick="window.location.href='/falla_ac'"
+                        title="Electric failure">
                         <i class="fas fa-bolt module-icon"></i>
                         <div class="module-name">Electric failure</div>
                         <div class="module-badge" id="ac-failures-count">...</div>
                     </div>
-                    <div class="module-item" data-module="region-la-libertad" title="Show battery">
-                        <i class="fas fa-eye module-icon"></i>
-                        <div class="module-name">show battery</div>
+                    <div class="module-item" data-module="show-battery" onclick="window.location.href='/show_battery'"
+                        title="Show-battery">
+                        <i class="fas fa-battery-full module-icon"></i>
+                        <div class="module-name">Show battery</div>
+                        <div class="module-badge" id="show-battery-count">...</div>
                     </div>
-                    <div class="module-item" data-module="region-san-martin" title="Issue battery">
-                        <i class="fas fa-exclamation-circle module-icon"></i>
-                        <div class="module-name">issue battery</div>
+                    <div class="module-item" data-module="region-san-martin"
+                        onclick="window.location.href='/rectifier_monitor'" title="Voltage">
+                        <i class="fas fa-bolt module-icon"></i>
+                        <div class="module-name">Voltage</div>
+                        <div class="module-badge" id="rectifier-alerts-count">...</div>
                     </div>
-                    <div class="module-item" data-module="disconnection" onclick="window.location.href='/disconection'" title="Battery disconnection">
+                    <div class="module-item" data-module="disconnection" onclick="window.location.href='/disconection'"
+                        title="Battery disconnection">
                         <i class="fas fa-unlink module-icon"></i>
                         <div class="module-name">Battery disconnection</div>
                         <div class="module-badge" id="disconnection-count">...</div>
@@ -222,7 +241,8 @@
             <div class="module-group">
                 <div class="module-group-title">HVAC</div>
                 <div class="module-group-content">
-                    <div class="module-item" data-module="hvac" onclick="window.location.href='/hvac'" title="Aire Acondicionado">
+                    <div class="module-item" data-module="hvac" onclick="window.location.href='/hvac'"
+                        title="Aire Acondicionado">
                         <i class="fas fa-wind module-icon"></i>
                         <div class="module-name">Aire Acondicionado</div>
                         <div class="module-badge" id="hvac-alerts-count">...</div>
@@ -242,11 +262,17 @@
                         <i class="fas fa-list-alt module-icon"></i>
                         <div class="module-name">Logs and events</div>
                     </div>
+                    <div class="module-item" data-module="edit-camera" onclick="window.location.href='/edit_camera'"
+                        title="Edit camera">
+                        <i class="fas fa-list-alt module-icon"></i>
+                        <div class="module-name">Edit camera</div>
+                    </div>
                     <div class="module-item" data-module="reports" title="Reports">
                         <i class="fas fa-chart-bar module-icon"></i>
                         <div class="module-name">Reports</div>
                     </div>
-                    <div class="module-item" data-module="settings" onclick="window.location.href='/settings'" title="Settings">
+                    <div class="module-item" data-module="settings" onclick="window.location.href='/settings'"
+                        title="Settings">
                         <i class="fas fa-cog module-icon"></i>
                         <div class="module-name">Settings</div>
                     </div>
@@ -266,7 +292,7 @@
 
         <div class="sidebar-footer">
             Unified Surveillance System<br>
-            v2.0
+            v1.2.0
         </div>
     </div>
 

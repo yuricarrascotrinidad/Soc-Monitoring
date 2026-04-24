@@ -4,10 +4,22 @@
 
 {% block content %}
 <div class="container">
-    <div class="header">
-        <h1 id="siDtitle">YOFC <span class="soc">SOC Dashboard</span></h1>
-        <p>Real-time surveillance system - Alarms and Cameras</p>
-        <div class="timestamp" id="timestamp"></div>
+    <div class="header" style="position: relative;">
+        <!-- Logotipo YOFC Oficial (Brand Guideline) -->
+        <div class="brand-logo-container" style="position: absolute; left: 30px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-start; user-select: none;">
+            <div style="font-size: 56px; font-weight: 800; letter-spacing: -2px; line-height: 1; display: flex;">
+                <span style="color: var(--yofc-pink);">Y</span><span style="color: var(--yofc-yellow);">O</span><span style="color: var(--yofc-green);">F</span><span style="color: var(--yofc-blue);">C</span>
+            </div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--text-color); margin-top: 8px; letter-spacing: 0.1px;">
+                Smart Link Better Life.
+            </div>
+        </div>
+
+        <h1 id="siDtitle" style="display: flex; justify-content: center; align-items: center; margin: 0;">
+            <span>SOC Dashboard</span>
+        </h1>
+        <p style="margin-top: 8px;">Real-time surveillance system - Alarms and Cameras</p>
+        <div class="timestamp" id="timestamp" style="margin-top: 5px;"></div>
     </div>
 
     <!-- ESTADÍSTICAS RÁPIDAS -->

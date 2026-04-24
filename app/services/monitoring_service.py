@@ -119,11 +119,10 @@ class MonitoringService:
             threading.Thread(target=MonitoringService.monitorear_tipo, args=(app, "access"), daemon=True),
             threading.Thread(target=MonitoringService.monitorear_tipo, args=(app, "transport"), daemon=True),
             threading.Thread(target=MonitoringService.monitorear_fallas_ac, args=(app,), daemon=True),
-            threading.Thread(target=MonitoringService._refresh_dashboard_cache_loop, args=(app,), daemon=True),
-            threading.Thread(target=MonitoringService.monitorear_telemetria_global, args=(app,), daemon=True)
+            threading.Thread(target=MonitoringService._refresh_dashboard_cache_loop, args=(app,), daemon=True)
         ]
         for t in threads: t.start()
-        logging.info("🚀 Hilos de monitoreo iniciados.")
+        logging.info("🚀 Hilos de monitoreo iniciados (Telemetría global migrada a BatteryService).")
 
     # --- SECCIÓN 2: PETICIONES API (PEIM) ---
 
@@ -196,7 +195,7 @@ class MonitoringService:
         hdrs["Host"] = f"{ip}:8090"
         hdrs["Origin"] = f"http://{ip}:8090"
         hdrs["Referer"] = f"http://{ip}:8090/peim/main/realtime/realtimedevice.html"
-        valores = {'soc': None, 'carga': None, 'descarga': None, 'voltaje': None, 'svoltage': None, 'current1': None, 'current2': None, 'conexion': None, 'voltaje_gen': None, 'corriente_gen': None}
+        valores = {'soc': None, 'carga': None, 'descarga': None, 'voltaje': None, 'svoltage': None, 'current1': None, 'current2': None, 'conexion': None, 'voltaje_gen': None, 'corriente_gen': None, 'capacidad': None}
         for i in range(1, 5): valores[f'soc_{i}'], valores[f'cur_{i}'] = None, None
         payload = f"device_id={device_id}&is_manual=0"
         try:
@@ -380,16 +379,12 @@ class MonitoringService:
     @staticmethod
     def actualizar_telemetria_bateria_batch(batch_data):
         if not batch_data: return
-        # Deduplicar por (device_id, nombre, sitio) – evita error ON CONFLICT cuando
-        # la misma batería aparece por dos rutas del árbol (nivel1 y dentro del FSU)
         seen = {}
         for row in batch_data:
-            key = (row[0], row[5], row[6])  # device_id, sitio, nombre
+            key = (row[0], row[5], row[6])
             seen[key] = row
         batch_data = list(seen.values())
-        for row in batch_data:
-            if "Rectificad" in str(row[6]) or row[8] is not None:
-                logging.debug(f"[DEBUG_TEL] ID: {row[0]} | Name: {row[6]} | Svolt: {row[8]}")
+        
         conn = get_db_connection()
         try:
             with conn:
@@ -397,7 +392,8 @@ class MonitoringService:
                 psycopg2.extras.execute_values(cur, """
                     INSERT INTO battery_telemetry 
                     (device_id, soc, carga, descarga, ultimo_update, sitio, nombre,
-                     voltaje, svoltage, current1, current2, conexion)
+                    voltaje, svoltage, current1, current2, conexion, capacidad, 
+                    region, tipo_sistema, tipo_dispositivo, voltaje_gen, corriente_gen)
                     VALUES %s
                     ON CONFLICT (device_id, nombre, sitio) DO UPDATE SET
                         soc = EXCLUDED.soc,
@@ -408,11 +404,18 @@ class MonitoringService:
                         current1 = EXCLUDED.current1,
                         current2 = EXCLUDED.current2,
                         conexion = EXCLUDED.conexion,
-                        ultimo_update = EXCLUDED.ultimo_update
+                        capacidad = EXCLUDED.capacidad,
+                        ultimo_update = EXCLUDED.ultimo_update,
+                        region = EXCLUDED.region,
+                        tipo_sistema = EXCLUDED.tipo_sistema,
+                        tipo_dispositivo = EXCLUDED.tipo_dispositivo,
+                        voltaje_gen = EXCLUDED.voltaje_gen,
+                        corriente_gen = EXCLUDED.corriente_gen
                 """, batch_data)
-                
-        except Exception as e: logging.error(f"Error UPSERT batch: {e}")
-        finally: conn.close()
+        except Exception as e: 
+            logging.error(f"Error UPSERT batch: {e}")
+        finally: 
+            conn.close()
 
     @staticmethod
     def actualizar_telemetria_bateria(device_id, valores, sitio=None, nombre=None):
@@ -432,39 +435,52 @@ class MonitoringService:
         if device_type == 47:  # Litio
             return [(
                 device_id, valores.get("soc"), valores.get("carga"), valores.get("descarga"),
-                now, sitio, nombre, None, None, None, None, valores.get("conexion")
+                now, sitio, nombre, None, None, None, None, valores.get("conexion"), valores.get("capacidad"),
+                None, None, "Litio", None, None
             )]
         elif device_type == 32:  # ZTE (No colapsar, guardar bancos independientes)
             rows = []
             conexion = valores.get("conexion")
+            capacidad = valores.get("capacidad")
             for i in range(1, 5):
                 soc_val = valores.get(f'soc_{i}')
                 cur_val = valores.get(f'cur_{i}')
                 # Si existe SOC o Corriente para el banco i, crear registro independiente
                 if soc_val is not None or cur_val is not None:
+                    # Lógica de Corriente ZTE (Usuario): Negativo = Descarga, Positivo = Carga
+                    cur_val_num = float(cur_val or 0)
+                    carga_val = cur_val_num if cur_val_num > 0 else 0
+                    descarga_val = abs(cur_val_num) if cur_val_num < 0 else 0
+
                     rows.append((
-                        device_id, soc_val, None, None, now, sitio, f"Bateria ZTE {i}",
-                        None, None, cur_val, None, conexion
+                        device_id, soc_val, carga_val, descarga_val, now, sitio, f"Bateria ZTE {i}",
+                        None, None, cur_val, None, conexion, capacidad,
+                        None, None, "ZTE", None, None
                     ))
             
             # Si no se encontraron bancos pero hay señal de conexión, mantener un registro base
             if not rows and conexion is not None:
                 rows.append((
                     device_id, None, None, None, now, sitio, nombre,
-                    None, None, None, None, conexion
+                    None, None, None, None, conexion, capacidad,
+                    None, None, "ZTE", None, None
                 ))
             return rows
         else:  # Rectificador (8 o 6) o Generador
             v_final = valores.get("voltaje")
             c_gen = None
+            d_type_name = "Rectificador"
+            v_gen = None
             # Si es Grupo Electrógeno (Type 5) o por nombre o categoría de alarma AC_FAIL_GE
             if str(device_type) == "5" or (nombre and 'Grupo Electrógeno' in nombre) or categoria == 'AC_FAIL_GE':
-                v_final = valores.get("voltaje_gen")
+                v_gen = valores.get("voltaje_gen")
                 c_gen = valores.get("corriente_gen")
+                d_type_name = "Generador"
             
             return [(
                 device_id, None, c_gen, None, now, sitio, nombre,
-                v_final, valores.get("svoltage"), valores.get("current1"), valores.get("current2"), valores.get("conexion")
+                v_final, valores.get("svoltage"), valores.get("current1"), valores.get("current2"), valores.get("conexion"), None,
+                None, None, d_type_name, v_gen, c_gen
             )]
 
     @staticmethod
@@ -882,9 +898,23 @@ class MonitoringService:
             cur.execute("SELECT COUNT(DISTINCT sitio) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'AC_FAIL'"); ac_c = cur.fetchone()[0]
             cur.execute("SELECT COUNT(DISTINCT device_id) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'BATERIA BAJA'"); bat_c = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM alarmas_activas WHERE estado = 'on' AND categoria = 'Bateria Lit. disc.'"); disc_c = cur.fetchone()[0]
+            
+            # Nuevos conteos para Voltage (Rectificadores) y Show Battery
+            try:
+                # Conteo total de rectificadores (desde rectifier_telemetry)
+                cur.execute("SELECT COUNT(*) FROM rectifier_telemetry")
+                rect_alert_c = cur.fetchone()[0]
+                # Conteo de baterías global (desde la tabla global battery_telemetry_global)
+                cur.execute("SELECT COUNT(*) FROM battery_telemetry_global")
+                show_bat_c = cur.fetchone()[0]
+            except:
+                rect_alert_c = 0; show_bat_c = 0
+
             h_data = HvacService.get_current_data(); h_c = sum(len(r.get("aires", [])) for r in h_data)
         finally: conn.close()
-        return {'access': acc, 'transport': tra, 'ac_failures_count': ac_c, 'battery_alerts_count': bat_c, 'disconnection_count': disc_c, 'hvac_total_count': h_c, 
+        return {'access': acc, 'transport': tra, 'ac_failures_count': ac_c, 'battery_alerts_count': bat_c, 
+                'disconnection_count': disc_c, 'hvac_total_count': h_c, 
+                'rectifier_alerts_count': rect_alert_c, 'show_battery_count': show_bat_c,
                 'cameras': {'access': acam, 'transport': tcam}, 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
                 'connection_errors': MonitoringService._connection_errors}
     
@@ -925,7 +955,10 @@ class MonitoringService:
             query += " ORDER BY hora DESC"
             
             cur.execute(query, params)
-            rows = cur.fetchall()
+            all_rows = cur.fetchall()
+            
+            # Filtrar por nombre _Battery
+            rows = [r for r in all_rows if not (r[5] and str(r[5]).strip().endswith('_Battery'))]
             
             # Formatear duración compacta
             def format_duration_compact(hora_dt):

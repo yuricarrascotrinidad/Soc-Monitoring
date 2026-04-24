@@ -113,19 +113,19 @@ function renderTable() {
                 const val = socs[i].soc !== null ? Math.round(socs[i].soc) : '';
 
                 let color = '';
-                if (isDischarging) color = 'color: #ef4444;';
-                else if (isCharging) color = 'color: #22c55e;';
+                if (isDischarging) color = 'color: var(--yofc-pink);';
+                else if (isCharging) color = 'color: var(--yofc-green);';
                 else if (socs[i].estado === 'IDLE') color = ''; // No color for IDLE
-                else if (socs[i].soc < 30) color = 'color: #ef4444;';
-                else if (socs[i].soc < 100) color = 'color: #22c55e;';
+                else if (socs[i].soc < 30) color = 'color: var(--yofc-pink);';
+                else if (socs[i].soc < 100) color = 'color: var(--yofc-green);';
 
                 let arrow = '';
-                if (isDischarging) arrow = '<i class="fa-solid fa-arrow-down" style="font-size:0.7rem; margin-left:2px; vertical-align:middle; color: #ef4444;"></i>';
-                else if (isCharging) arrow = '<i class="fa-solid fa-arrow-up" style="font-size:0.7rem; margin-left:2px; vertical-align:middle; color: #22c55e;"></i>';
+                if (isDischarging) arrow = '<i class="fa-solid fa-arrow-down" style="font-size:0.7rem; margin-left:2px; vertical-align:middle; color: var(--yofc-pink);"></i>';
+                else if (isCharging) arrow = '<i class="fa-solid fa-arrow-up" style="font-size:0.7rem; margin-left:2px; vertical-align:middle; color: var(--yofc-green);"></i>';
 
                 return `<td style="text-align: center; font-weight: 700; ${color}">${val}${arrow}</td>`;
             }
-            return `<td style="text-align: center; color: #94a3b8; font-size: 0.8rem;">--</td>`;
+            return `<td style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">--</td>`;
         }).join('');
 
         // Type Badges
@@ -141,20 +141,19 @@ function renderTable() {
         // Elapsed Time
         const alarmTime = new Date(r.hora);
         const elapsedMs = now - alarmTime;
-        const elapsedHours = elapsedMs / (1000 * 60 * 60);
+        
         let elapsedStr = "--";
-        if (elapsedHours > 0) {
-            const h = Math.floor(elapsedHours);
-            const m = Math.floor((elapsedHours - h) * 60);
-            elapsedStr = `${h}h ${m}m`;
-
-            if (elapsedHours < 24) {
-                const hf = Math.floor(elapsedHours);
-                const mf = Math.floor((elapsedHours - hf) * 60);
-                elapsedStr = `${hf}h ${mf}m`;
-                if (hf === 0) elapsedStr = `${mf}m`;
+        if (elapsedMs > 0) {
+            const d = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+            const h = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (d > 0) {
+                elapsedStr = `${d}d ${h}h ${m}m`;
+            } else if (h > 0) {
+                elapsedStr = `${h}h ${m}m`;
             } else {
-                elapsedStr = `${(elapsedHours / 24).toFixed(1)}d`;
+                elapsedStr = `${m}m`;
             }
         }
 
@@ -173,8 +172,8 @@ function renderTable() {
             <td style="font-weight: 700;">${r.svoltaje || '-'}</td>
             <td style="text-align: center;">${r.current1 || 0}</td>
             <td style="text-align: center;">${r.current2 || 0}</td>
-            <td style="color: #22c55e; font-weight: 700;">${elapsedStr}</td>
-            <td style="font-size: 0.8rem; color: #64748b;">${r.hora}</td>
+            <td style="color: var(--yofc-green); font-weight: 700;">${elapsedStr}</td>
+            <td style="font-size: 0.8rem; color: var(--text-muted);">${r.hora}</td>
             <td>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <label class="checkbox-revisado" onclick="event.stopPropagation();" title="Marcar como revisado">
@@ -244,22 +243,23 @@ function buildBatteryCards(baterias, sitio) {
 
         const info = statusMap[bat.estado] || statusMap['NO DATA'];
         const isDisconnected = parseInt(bat.conexion) === 1;
+        const stateClass = bat.estado ? bat.estado.toLowerCase() : 'other';
 
         const batteryNameContent = isDisconnected
             ? `<span style="color: var(--critical-red); font-weight: 800;">⛓️‍💥 ${bat.nombre || `Batería ${i + 1}`}</span>`
             : (bat.nombre || `Batería ${i + 1}`);
 
         html += `
-            <div class="battery-mini-card ${isDisconnected ? 'disconnected-warning' : ''}">
+            <div class="battery-mini-card ${stateClass} ${isDisconnected ? 'disconnected-warning' : ''}">
                 <div class="battery-mini-header">
-                    <span style="display: flex; align-items: center; gap: 4px;">
+                    <span style="display: flex; align-items: center; gap: 4px; font-weight: 700;">
                         ${batteryNameContent}
                     </span>
-                    <span class="badge ${info.class}"><span class="dot"></span> ${info.label}</span>
+                    <span class="badge ${info.class}" style="border-radius: 20px; padding: 2px 10px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase;"><span class="dot" style="width: 6px; height: 6px;"></span> ${info.label}</span>
                 </div>
-                <div class="battery-mini-soc">${soc}</div>
-                <div class="battery-mini-flow" style="color: ${flowColor}; font-weight: 700;">${flowVal}</div>
-                <div class="battery-mini-update">Act: ${bat.ultimo_update || '---'}</div>
+                <div class="battery-mini-soc" style="font-size: 1.4rem; font-weight: 800;">${soc}</div>
+                <div class="battery-mini-flow" style="color: ${flowColor}; font-weight: 700; margin-bottom: 6px;">${flowVal}</div>
+                <div class="battery-mini-update" style="font-size: 0.65rem; font-weight: 500;">Act: ${bat.ultimo_update || '---'}</div>
             </div>
         `;
     });
@@ -318,9 +318,19 @@ async function showReportModal(sitio, hora) {
     const elapsedMs = now - alarmTime;
     const elapsedHours = elapsedMs / (1000 * 60 * 60);
 
-    const hours = Math.floor(elapsedHours);
-    const minutes = Math.floor((elapsedHours - hours) * 60);
-    const elapsedStr = `${hours}h ${minutes}m`;
+    let elapsedStr = "--";
+    if (elapsedMs > 0) {
+        const d = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+        const h = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const m = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+        if (d > 0) {
+            elapsedStr = `${d}d ${h}h ${m}m`;
+        } else if (h > 0) {
+            elapsedStr = `${h}h ${m}m`;
+        } else {
+            elapsedStr = `${m}m`;
+        }
+    }
 
     let currentSoc = 100;
     if (record.baterias && record.baterias.length > 0) {
@@ -354,8 +364,8 @@ async function showReportModal(sitio, hora) {
     let batteriesHtml = '';
     if (record.baterias && record.baterias.length > 0) {
         batteriesHtml = `
-            <div style="margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 20px;">
-                <span style="font-weight: 800; color: #64748b; font-size: 13px; text-transform: uppercase; display: block; margin-bottom: 12px;">
+            <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                <span style="font-weight: 800; color: var(--text-muted); font-size: 13px; text-transform: uppercase; display: block; margin-bottom: 12px;">
                     <i class="fa-solid fa-battery-three-quarters"></i> Detalle de Baterías:
                 </span>
                 <div class="modal-battery-grid" style="transform: scale(0.95); transform-origin: top left;">
@@ -371,7 +381,7 @@ async function showReportModal(sitio, hora) {
             <!-- Header Section -->
             <div class="modal-qir-header">
                 <span class="modal-qir-title">${record.sitio}</span>
-                <span class="modal-qir-id">${record.voltaje}</span>
+                <span class="modal-qir-id">AC ${record.voltaje}</span>
             </div>
 
             <!-- Content Body -->
@@ -383,11 +393,11 @@ async function showReportModal(sitio, hora) {
                 <div class="modal-qir-info-row">
                     <div class="modal-qir-info-label">Electrical Info:</div>
                     <div class="modal-qir-info-value">
-                        ${record.svoltaje !== null ? record.svoltaje + 'V' : '--- '} 
-                        <span style="color: #94a3b8; margin: 0 8px;">|</span> 
-                        C1: ${record.current1 || '0'}A 
-                        <span style="color: #94a3b8; margin: 0 8px;">|</span> 
-                        C2: ${record.current2 || '0'}A
+                        VSyS ${record.svoltaje !== null ? record.svoltaje + 'V' : '--- '} 
+                        <span style="color: var(--text-muted); margin: 0 8px;">|</span> 
+                        lbat1: ${record.current1 || '0'}A 
+                        <span style="color: var(--text-muted); margin: 0 8px;">|</span> 
+                        lbat2: ${record.current2 || '0'}A
                     </div>
                 </div>
 
@@ -513,6 +523,18 @@ async function loadData() {
         const data = await response.json();
 
         allRecords = data.records || [];
+        
+        // Ensure baterias are always sorted by name (numerically aware)
+        allRecords.forEach(r => {
+            if (r.baterias && Array.isArray(r.baterias)) {
+                r.baterias.sort((a, b) => {
+                    const nameA = (a.nombre || '').toLowerCase();
+                    const nameB = (b.nombre || '').toLowerCase();
+                    return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+                });
+            }
+        });
+
         renderTable();
 
         if (timestamp) timestamp.innerText = `Última actualización: ${new Date().toLocaleString()}`;
@@ -642,21 +664,27 @@ function exportToExcel() {
         // Elapsed Time
         const alarmTime = new Date(r.hora);
         const elapsedMs = now - alarmTime;
-        const elapsedHours = elapsedMs / (1000 * 60 * 60);
-        let elapsedStr = "";
-        if (elapsedHours > 0) {
-            const h = Math.floor(elapsedHours);
-            const m = Math.floor((elapsedHours - h) * 60);
-            elapsedStr = `${h}h ${m}m`;
-        } else {
-            elapsedStr = "--";
+        
+        let elapsedStr = "--";
+        if (elapsedMs > 0) {
+            const d = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+            const h = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (d > 0) {
+                elapsedStr = `${d}d ${h}h ${m}m`;
+            } else if (h > 0) {
+                elapsedStr = `${h}h ${m}m`;
+            } else {
+                elapsedStr = `${m}m`;
+            }
         }
 
         // Status General
         let status = "OTHER";
         if ((r.baterias || []).some(b => b.estado === 'DISCHARGING')) status = "DISCHARGING";
+        else if ((r.baterias || []).some(b => b.estado === 'CHARGING')) status = "CHARGING";
         else if ((r.baterias || []).some(b => b.estado === 'IDLE')) status = "IDLE";
-
 
         return {
             "NW": nw,
@@ -666,6 +694,7 @@ function exportToExcel() {
             "B3": b3,
             "B4": b4,
             "TYPE": typeStr,
+            "STATUS": status,
             "AC V": r.voltaje || 'N/A',
             "VDC": r.svoltaje || '-',
             "CUR 1": r.current1 || 0,
@@ -689,6 +718,7 @@ function exportToExcel() {
         { wch: 5 },  // B3
         { wch: 5 },  // B4
         { wch: 10 }, // TYPE
+        { wch: 15 }, // STATUS
         { wch: 10 }, // AC V
         { wch: 8 },  // VDC
         { wch: 8 },  // CUR 1

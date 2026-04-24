@@ -1,51 +1,31 @@
 :root {
-    /* YOFC Brand Colors */
-    --yofc-pink: #CE0F69;
-    --yofc-yellow: #FFB932;
-    --yofc-green: #A5C84B;
-    --yofc-blue: #009CDE;
-    --yofc-black: #000000;
-
-    --yofc-pink-60: #E55683;
-    --yofc-yellow-60: #FEC661;
-    --yofc-green-60: #B6D671;
-    --yofc-blue-60: #37AAE1;
-
-    --yofc-pink-40: #EA819C;
-    --yofc-yellow-40: #FFD387;
-    --yofc-green-40: #C7DF93;
-    --yofc-blue-40: #73BAE7;
-
-    /* Semantic mapping */
-    --bg-color: #f5f5f5;
+    --bg-color: #f4f7fa;
     --card-bg: #ffffff;
-    --primary-blue: var(--yofc-pink);
-    --accent-blue: var(--yofc-pink-60);
-    --text-dark: #111111;
+    --primary-blue: #003366;
+    --accent-blue: #0056b3;
+    --text-dark: #333333;
     --text-muted: #666666;
-    --critical-red: var(--yofc-pink);
-    --caution-yellow: var(--yofc-yellow);
-    --normal-green: var(--yofc-green);
-    --no-data-gray: #999999;
+    --critical-red: #dc3545;
+    --caution-yellow: #ffc107;
+    --normal-green: #28a745;
+    --no-data-gray: #6c757d;
     --filter-bg: #ffffff;
     --filter-group-bg: #f0f2f5;
     --table-header-bg: #f8f9fa;
-    --table-border: #e0e0e0;
+    --table-border: #f1f1f1;
     --table-row-hover: #fafbfd;
 }
 
 .dark-theme {
-    --bg-color: #1a1a1a;
-    --card-bg: #1e1e1e;
-    --primary-blue: var(--yofc-pink);
-    --accent-blue: var(--yofc-pink-60);
-    --text-dark: #f0f0f0;
-    --text-muted: #aaaaaa;
-    --filter-bg: #2a2a2a;
-    --filter-group-bg: #3a3a3a;
-    --table-header-bg: #2a2a2a;
-    --table-border: #333333;
-    --table-row-hover: #2a2a2a;
+    --bg-color: #0f172a;
+    --card-bg: #1e293b;
+    --text-dark: #f8fafc;
+    --text-muted: #cbd5e1;
+    --filter-bg: #1e293b;
+    --filter-group-bg: #334155;
+    --table-header-bg: #334155;
+    --table-border: #334155;
+    --table-row-hover: #334155;
 }
 
 body {
@@ -99,6 +79,7 @@ body {
     background-color: var(--accent-blue);
 }
 
+/* Summary Cards */
 .summary-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -145,65 +126,7 @@ body {
     text-align: center;
 }
 
-/* Grouped View Styles */
-.site-group-row td {
-    background-color: var(--table-header-bg) !important;
-    color: var(--text-dark) !important;
-    padding: 12px 20px !important;
-    border-left: 4px solid var(--yofc-blue) !important;
-    font-weight: 700 !important;
-}
-
-.expand-row {
-    transition: background-color 0.2s;
-}
-
-.expand-row:hover {
-    background-color: var(--table-row-hover) !important;
-}
-
-.detail-row td {
-    background-color: var(--bg-color) !important;
-    padding: 0 !important;
-}
-
-.detail-inner {
-    padding: 20px;
-}
-
-.battery-mini-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 15px;
-}
-
-.battery-mini-card {
-    background: var(--card-bg);
-    border: 1px solid var(--table-border);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    transition: transform 0.2s, box-shadow 0.2s;
-    color: var(--text-dark);
-}
-
-.battery-mini-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.badge-nw {
-    background: var(--filter-group-bg);
-    color: var(--text-muted);
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-weight: 700;
-    font-size: 0.7rem;
-}
-
-.voltage-high { color: var(--normal-green); font-weight: 700; }
-.voltage-low { color: var(--critical-red); font-weight: 700; }
-
+/* Filter Bar */
 .filter-bar {
     background: var(--filter-bg);
     padding: 15px 20px;
@@ -270,6 +193,7 @@ body {
     gap: 5px;
 }
 
+/* Table Styles */
 .table-container {
     background: var(--card-bg);
     border-radius: 12px;
@@ -304,6 +228,7 @@ body {
     background-color: var(--table-row-hover);
 }
 
+/* Status Badges */
 .badge {
     display: inline-flex;
     align-items: center;
@@ -316,18 +241,18 @@ body {
 }
 
 .badge-critical {
-    background-color: rgba(206, 15, 105, 0.15);
-    color: var(--yofc-pink);
+    background-color: #fee2e2;
+    color: var(--critical-red);
 }
 
 .badge-caution {
-    background-color: rgba(255, 185, 50, 0.15);
+    background-color: #fef3c7;
     color: #b45309;
 }
 
 .badge-normal {
-    background-color: rgba(165, 200, 75, 0.15);
-    color: var(--yofc-green);
+    background-color: #dcfce7;
+    color: var(--normal-green);
 }
 
 .badge-nodata {
@@ -343,15 +268,15 @@ body {
 }
 
 .badge-critical .dot {
-    background-color: var(--yofc-pink);
+    background-color: var(--critical-red);
 }
 
 .badge-caution .dot {
-    background-color: var(--yofc-yellow);
+    background-color: var(--caution-yellow);
 }
 
 .badge-normal .dot {
-    background-color: var(--yofc-green);
+    background-color: var(--normal-green);
 }
 
 .badge-nodata .dot {

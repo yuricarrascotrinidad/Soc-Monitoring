@@ -51,3 +51,15 @@ def access_camera():
 @main_bp.route('/transport_camera')
 def transport_camera():
     return render_template('transport_camera.html')
+
+@main_bp.route('/edit_camera')
+def edit_camera():
+    return render_template('edit_camera.html')
+
+@main_bp.route('/show_battery')
+def show_battery():
+    return render_template('show_battery.html')
+
+@main_bp.route('/rectifier_monitor')
+def rectifier_monitor():
+    return render_template('rectifier_monitor.html')

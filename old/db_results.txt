@@ -1,9 +1,0 @@
---- DEVICES FOR T1053_AR_UCHUMAYO ---
-ID: 00001006000000003978
-  Name: Batería de Litio 1
-  Volt: None | SOC: 100.0
-  Update: 2026-03-03 12:08:29.679986
---------------------
-
---- ACTIVE ALARMS FOR T1053_AR_UCHUMAYO ---
-T: 2026-03-03 12:06:37 | Cat: AC_FAIL | Al: Ac ingresa voltaje fase XX Ua | Dev: 00001006000000000664

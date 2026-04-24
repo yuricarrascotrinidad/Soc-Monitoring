@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Battery with Capacity{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/battery.css') }}">
+<style>
+    /* Estilos adicionales para columna capacidad */
+    .data-table th,
+    .data-table td {
+        text-align: left;
+    }
+
+    .capacity-value {
+        font-weight: 600;
+        color: var(--yofc-blue);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="battery-dashboard-container">
+    <div class="header-section">
+        <div class="header-title">
+            <h1><i class="fa-solid fa-battery-full"></i> Lithium Battery Monitor - Capacity View</h1>
+            <p id="update-timestamp">Latest update: --/--/-- --:--:--</p>
+        </div>
+        <button onclick="loadData()" class="refresh-button">
+            <i class="fa-solid fa-rotate"></i> Update data
+        </button>
+    </div>
+
+    <!-- Summary Cards (igual que battery.html) -->
+    <div class="summary-grid">
+        <div class="summary-card" id="card-total" onclick="filterByStatus('all')">
+            <i class="fa-solid fa-microchip icon"></i>
+            <span class="title">Total Batteries</span>
+            <div class="value" id="stat-total">0</div>
+            <div class="sub-value" id="stat-counts-sub">0 Access - 0 Transport</div>
+        </div>
+        <div class="summary-card" id="card-discharging" onclick="filterByStatus('DISCHARGING')">
+            <i class="fa-solid fa-triangle-exclamation icon" style="color: var(--critical-red);"></i>
+            <span class="title">Discharge</span>
+            <div class="value" id="stat-critical">0</div>
+            <div class="sub-value">Require immediate attention</div>
+        </div>
+        <div class="summary-card" id="card-idle" onclick="filterByStatus('IDLE')">
+            <i class="fa-solid fa-circle-info icon" style="color: var(--caution-yellow);"></i>
+            <span class="title">Caution</span>
+            <div class="value" id="stat-caution">0</div>
+            <div class="sub-value">Monitor evolution</div>
+        </div>
+        <div class="summary-card" id="card-charging" onclick="filterByStatus('CHARGING')">
+            <i class="fa-solid fa-circle-check icon" style="color: var(--normal-green);"></i>
+            <span class="title">Charge</span>
+            <div class="value" id="stat-normal">0</div>
+            <div class="sub-value">Optimal functioning</div>
+        </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="search-container" style="margin-bottom: 20px;">
+        <div class="search-box" style="position: relative; width: 100%; max-width: 400px;">
+            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #a0aec0;"></i>
+            <input type="text" id="site-search" placeholder="Buscar sitio por nombre o código..." 
+                   style="width: 100%; padding: 12px 15px 12px 45px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 1rem; outline: none; transition: border-color 0.2s; background: var(--sidebar-bg); color: var(--text-color);">
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <span class="filter-label"><i class="fa-solid fa-filter"></i> Type:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="tipo" data-value="todos">All</button>
+                <button class="filter-btn" data-filter="tipo" data-value="access"><i class="fa-solid fa-door-open"></i>
+                    Access</button>
+                <button class="filter-btn" data-filter="tipo" data-value="transport"><i class="fa-solid fa-truck"></i>
+                    Transport</button>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <span class="filter-label"><i class="fa-solid fa-location-dot"></i> Region:</span>
+            <div class="filter-options">
+                <button class="filter-btn active" data-filter="region" data-value="todas">All</button>
+                <button class="filter-btn" data-filter="region" data-value="Ancash">Ancash</button>
+                <button class="filter-btn" data-filter="region" data-value="Arequipa">Arequipa</button>
+                <button class="filter-btn" data-filter="region" data-value="La Libertad">La Libertad</button>
+                <button class="filter-btn" data-filter="region" data-value="San Martin">San Martin</button>
+            </div>
+        </div>
+
+        <a href="javascript:void(0)" class="clear-filters" onclick="resetFilters()">
+            <i class="fa-solid fa-circle-xmark"></i> Clear filters
+        </a>
+    </div>
+
+    <!-- Table con Estilo Electric Failure -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th width="50">Type</th>
+                    <th>Site Name</th>
+                    <th>Region</th>
+                    <th class="text-center">Devices</th>
+                    <th class="text-center">Avg. SOC</th>
+                    <th class="text-center">Status</th>
+                    <th width="100">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="data-body">
+                <tr>
+                    <td colspan="7" class="text-center">Loading battery inventory...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/show_battery.js') }}"></script>
+{% endblock %}

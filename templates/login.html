@@ -1,18 +1,26 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YOFC SOC - Login</title>
     <link rel="icon" href="/static/images/icon.png" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <style>
         :root {
-            --primary: #3b82f6;
-            --primary-dark: #2563eb;
-            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --glass-bg: rgba(255, 255, 255, 0.05);
+            --yofc-pink: #CE0F69;
+            --yofc-yellow: #FFB932;
+            --yofc-green: #A5C84B;
+            --yofc-blue: #009CDE;
+            --yofc-black: #000000;
+
+            --primary: var(--yofc-pink);
+            --primary-dark: #B00D5C;
+            --glass-bg: rgba(0, 0, 0, 0.55);
             --glass-border: rgba(255, 255, 255, 0.1);
             --text-main: #f8fafc;
             --text-dim: #94a3b8;
@@ -22,38 +30,61 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Montserrat', sans-serif;
         }
 
         body {
-            background: var(--bg-gradient);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
             position: relative;
+            overflow: hidden;
         }
 
-        /* Decorative blobs */
-        .blob {
+        /* ============ CARRUSEL DE FONDO ============ */
+        .slideshow-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            overflow: hidden;
+        }
+
+        .slide {
             position: absolute;
-            width: 400px;
-            height: 400px;
-            background: var(--primary);
-            filter: blur(80px);
-            border-radius: 50%;
-            opacity: 0.15;
-            z-index: 0;
-            animation: move 20s infinite alternate;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out;
         }
 
-        .blob-1 { top: -100px; left: -100px; background: #3b82f6; }
-        .blob-2 { bottom: -100px; right: -100px; background: #6366f1; }
+        .slide.active {
+            opacity: 1;
+        }
 
-        @keyframes move {
-            from { transform: translate(0, 0); }
-            to { transform: translate(50px, 50px); }
+        /* Overlay oscuro para mejorar legibilidad del texto */
+        .slideshow-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: -1;
+        }
+
+        /* Efecto de blur sutil en el fondo */
+        .slideshow-container {
+            filter: brightness(0.9);
         }
 
         .login-container {
@@ -67,6 +98,19 @@
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             position: relative;
             z-index: 10;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .header {
@@ -78,10 +122,26 @@
             font-size: 2.5em;
             font-weight: 800;
             margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 2px;
         }
 
-        .yof { color: #fff; }
-        .soc { color: #3b82f6; }
+        .logo-y {
+            color: var(--yofc-pink);
+        }
+
+        .logo-o {
+            color: var(--yofc-yellow);
+        }
+
+        .logo-f {
+            color: var(--yofc-green);
+        }
+
+        .logo-c {
+            color: var(--yofc-blue);
+        }
 
         .subtitle {
             color: var(--text-dim);
@@ -106,7 +166,7 @@
         input {
             width: 100%;
             padding: 14px 14px 14px 45px;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.1);
             border: 1px solid var(--glass-border);
             border-radius: 12px;
             color: white;
@@ -115,10 +175,14 @@
             transition: all 0.3s;
         }
 
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
         input:focus {
             border-color: var(--primary);
-            background: rgba(255, 255, 255, 0.08);
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 0 4px rgba(206, 15, 105, 0.2);
         }
 
         button {
@@ -138,7 +202,7 @@
         button:hover {
             background: var(--primary-dark);
             transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 10px 15px -3px rgba(206, 15, 105, 0.4);
         }
 
         button:active {
@@ -163,7 +227,6 @@
             font-size: 0.8em;
         }
 
-        /* Loading state */
         .loading {
             position: relative;
             pointer-events: none;
@@ -186,17 +249,76 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Indicadores del carrusel (opcional) */
+        .slide-indicators {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .indicator.active {
+            background: var(--yofc-pink);
+            width: 24px;
+            border-radius: 10px;
+        }
+
+        .indicator:hover {
+            background: var(--yofc-pink-60);
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 20px;
+                padding: 30px 24px;
+            }
+
+            .logo {
+                font-size: 2em;
+            }
         }
     </style>
 </head>
+
 <body>
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
+
+    <!-- CARRUSEL DE FONDO -->
+    <div class="slideshow-container" id="slideshowContainer">
+        <div class="slide" style="background-image: url('/static/images/login_office.jpg');"></div>
+        <div class="slide" style="background-image: url('/static/images/login_office2.jpg');"></div>
+    </div>
+
+    <!-- Indicadores del carrusel -->
+    <div class="slide-indicators" id="slideIndicators">
+        <div class="indicator" data-index="0"></div>
+        <div class="indicator" data-index="1"></div>
+    </div>
 
     <div class="login-container">
         <div class="header">
-            <div class="logo"><span class="yof">YOFC</span><span class="soc">SOC</span></div>
+            <div class="logo">
+                <span class="logo-y">Y</span>
+                <span class="logo-o">O</span>
+                <span class="logo-f">F</span>
+                <span class="logo-c">C</span>
+            </div>
             <div class="subtitle">SECURITY OPERATIONS CENTER</div>
         </div>
 
@@ -214,10 +336,74 @@
         </form>
 
         <div class="footer">
-            &copy; 2026 YOFC SOC - v2.5
+            &copy; 2026 YOFC SOC - v1.2.0
         </div>
     </div>
 
     <script src="/static/js/login.js"></script>
+
+    <script>
+        // Carrusel automático de imágenes
+        (function () {
+            const slides = document.querySelectorAll('.slide');
+            const indicators = document.querySelectorAll('.indicator');
+            let currentIndex = 0;
+            const totalSlides = slides.length;
+            let interval;
+
+            function showSlide(index) {
+                // Remover clase active de todos los slides
+                slides.forEach(slide => {
+                    slide.classList.remove('active');
+                });
+
+                // Remover clase active de todos los indicadores
+                indicators.forEach(indicator => {
+                    indicator.classList.remove('active');
+                });
+
+                // Activar slide e indicador correspondiente
+                slides[index].classList.add('active');
+                if (indicators[index]) {
+                    indicators[index].classList.add('active');
+                }
+            }
+
+            function nextSlide() {
+                currentIndex = (currentIndex + 1) % totalSlides;
+                showSlide(currentIndex);
+            }
+
+            function startCarousel() {
+                if (interval) clearInterval(interval);
+                interval = setInterval(nextSlide, 5000); // Cambia cada 5 segundos
+            }
+
+            // Configurar click en indicadores
+            indicators.forEach((indicator, idx) => {
+                indicator.addEventListener('click', () => {
+                    currentIndex = idx;
+                    showSlide(currentIndex);
+                    startCarousel(); // Reiniciar el intervalo
+                });
+            });
+
+            // Inicializar
+            showSlide(0);
+            startCarousel();
+
+            // Pausar carrusel cuando el usuario interactúa con el formulario (opcional)
+            const loginContainer = document.querySelector('.login-container');
+            loginContainer.addEventListener('mouseenter', () => {
+                if (interval) clearInterval(interval);
+            });
+
+            loginContainer.addEventListener('mouseleave', () => {
+                startCarousel();
+            });
+        })();
+    </script>
+
 </body>
+
 </html>

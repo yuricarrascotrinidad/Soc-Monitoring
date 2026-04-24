@@ -27,8 +27,10 @@ if __name__ == '__main__':
     if is_reloader_main or not app.debug:
         from app.services.monitoring_service import MonitoringService
         from app.services.hvac_service import HvacService
+        from app.services.battery_service import BatteryService
         time.sleep(1)
         MonitoringService.start_monitoring_threads(app)
         HvacService.start_hvac_monitoring(app)
+        BatteryService.start_battery_monitoring(app)
 
     app.run(host='0.0.0.0', port=8000, debug=app.debug)

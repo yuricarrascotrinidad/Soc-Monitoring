@@ -134,6 +134,7 @@ SENSORES_INTERES = {
     "0147106001": "carga",     
     "0147106002": "descarga",  
     "0147099001": "conexion",
+    "0147105001": "capacidad",
     
     # ZTE (Type 32)
     "0132125001": "soc_1",
@@ -145,6 +146,8 @@ SENSORES_INTERES = {
     "0132123003": "cur_3",
     "0132123004": "cur_4",
     "0132099001": "conexion",
+    "0132311001": "capacidad",
+   
 
     # Rectificador (Type 6/8)
     "0106101001": "voltaje",    
